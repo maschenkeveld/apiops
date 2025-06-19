@@ -1,0 +1,2 @@
+export DECK_OTEL_BACKEND_HOSTNAME=otel-collector.otel-collector.svc.cluster.local
+export DECK_OTEL_BACKEND_PORT=80
