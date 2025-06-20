@@ -2,22 +2,29 @@
 
 Home to Alice and Bob
 
-## Monorepo folder structure
-- **apis**: This is where all the different APIs live in their own folder
-    - **additions**: Containing config elements you want to add to the generated decK file
-    - **deck-file**: A placeholder folder for the deck files that get generated from the OpenAPI spec during the pipeline run
-    - **env-vars**: Environment (dev, test, staging, prod) AND API specific variables, to be used with patches
-    - **md-file**: Documentation files for the API (might need to be updated for Dev Portal v3)
-    - **openapi-spec**: The OpenAPI spec for the API, this is the source of thruth for the API contract, should be as clean as possible.
-    - **patches**: Patches that will be applied to the generated decK file, to be used with env-vars
-    - **plugins**: Plugins that will be applied to the generated decK file, can be used with common/plugin-templates
+## Monorepo Folder Structure
 
-- **common**: This is where common plugins and patches live, which are environment specific but not API specific 
-    - **env-vars**: Environment (dev, test, staging, prod) specific variables, to be used with patches
-    - **patches**: Patches that will be applied to the generated decK file, to be used with env-vars
-    - **plugin-templates**: Templates for plugins that will be applied to APIs, the templated part is the part of the configuration that will be the same for all - APIs
+### `apis/`
+Contains all individual API configurations, each in its own subfolder:
 
-- **global**: This is where the decK file containing the global configurations lives
-    - **deck-file**: decK files that contains the global configurations (plugins, consumers, certificates, etc). When global elements (e.g. consumers) need to be referenced from API specific pipelines we can use https://developer.konghq.com/deck/gateway/tags/#partial-configuration-and-foreign-keys
-    - **env-vars**: Environment (dev, test, staging, prod) AND API specific variables, to be used with patches
-    - **patches**: Patches that will be applied to the decK file, to be used with env-vars
+- **`additions/`**: Configuration elements to be added to the generated decK file.
+- **`deck-file/`**: Placeholder for decK files generated from the OpenAPI spec during the CI/CD pipeline.
+- **`env-vars/`**: Environment-specific (dev, test, staging, prod) and API-specific variables, used in combination with patches.
+- **`md-file/`**: API documentation files. *(May require updates for Dev Portal v3 compatibility.)*
+- **`openapi-spec/`**: The OpenAPI specification – the single source of truth for the API contract. Should be kept clean and accurate.
+- **`patches/`**: Patches applied to the generated decK file, used alongside `env-vars/`.
+- **`plugins/`**: Plugin configurations for the API, optionally referencing shared templates from `common/plugin-templates`.
+
+### `common/`
+Holds shared configurations that are **environment-specific** but **not API-specific**:
+
+- **`env-vars/`**: Environment-specific variables, used with patches.
+- **`patches/`**: Common patches applied to decK files, driven by environment variables.
+- **`plugin-templates/`**: Reusable plugin templates. Define shared plugin configurations across APIs.
+
+### `global/`
+Contains configurations that apply across all APIs:
+
+- **`deck-file/`**: Global decK files defining shared resources (e.g., plugins, consumers, certificates). These can be referenced from API-specific pipelines using [decK’s tag-based partial configuration and foreign keys](https://developer.konghq.com/deck/gateway/tags/#partial-configuration-and-foreign-keys).
+- **`env-vars/`**: Environment-specific and global variables, used with patches.
+- **`patches/`**: Patches applied to the global decK file, also driven by environment variables.
