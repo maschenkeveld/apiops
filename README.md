@@ -28,3 +28,8 @@ Contains configurations that apply across all APIs:
 - **`deck-file/`**: Global decK files defining shared resources (e.g., plugins, consumers, certificates). These can be referenced from API-specific pipelines using [decK’s tag-based partial configuration and foreign keys](https://developer.konghq.com/deck/gateway/tags/#partial-configuration-and-foreign-keys).
 - **`env-vars/`**: Environment-specific and global variables, used with patches.
 - **`patches/`**: Patches applied to the global decK file, also driven by environment variables.
+
+## Github Actions workflows
+
+- **`global.yaml`**: To deploy global configurations 
+- **`apis.yaml`**: To deploy individual APIs
