@@ -18,6 +18,6 @@ Home to Alice and Bob
     - **plugin-templates**: Templates for plugins that will be applied to APIs, the templated part is the part of the configuration that will be the same for all - APIs
 
 - **global**: This is where the decK file containing the global configurations lives
-    - **deck-file**: The decK file that contains the global configurations (plugins, consumers, certificates, etc)
+    - **deck-file**: decK files that contains the global configurations (plugins, consumers, certificates, etc). When global elements (e.g. consumers) need to be referenced from API specific pipelines we can use https://developer.konghq.com/deck/gateway/tags/#partial-configuration-and-foreign-keys
     - **env-vars**: Environment (dev, test, staging, prod) AND API specific variables, to be used with patches
     - **patches**: Patches that will be applied to the decK file, to be used with env-vars
