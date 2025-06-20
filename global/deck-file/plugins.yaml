@@ -1,0 +1,15 @@
+_format_version: "3.0"
+_info:
+  select_tags:
+    - global-plugins
+
+plugins:
+  - name: prometheus
+    config:
+      ai_metrics: false
+      bandwidth_metrics: true
+      latency_metrics: true
+      per_consumer: true
+      status_code_metrics: true
+      upstream_health_metrics: true
+      wasm_metrics: false

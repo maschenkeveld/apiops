@@ -1,0 +1,12 @@
+_format_version: "3.0"
+_info:
+  select_tags:
+    - global-consumers
+
+consumers:
+  - username: global-consumer-1
+    custom_id: "global-consumer-1"
+  - username: global-consumer-2
+    custom_id: "global-consumer-2"
+  - username: global-consumer-3
+    custom_id: "global-consumer-3"
