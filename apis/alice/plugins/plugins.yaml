@@ -10,3 +10,6 @@ add-plugins:
       config:
         scopes_required:
           - alice_read
+    - name: rate-limiting
+      consumer: global-consumer-1
+      _config: common_rate_limiting
