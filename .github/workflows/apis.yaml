@@ -289,6 +289,8 @@ jobs:
               --konnect-token "$KONNECT_TOKEN" \
               --select-tag "$app" 
           done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 # TBA: Optional: Instead of a deck sync, a git push to a remote repository. For integration with GitOps.
 
