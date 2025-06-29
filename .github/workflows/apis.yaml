@@ -159,11 +159,14 @@ jobs:
 
       - name: Patch Kong Config with Plugins
         run: |
+          export DECK_API_VERSION=$(yq eval '.info.version' $DECK_API_PATH/openapi-spec/openapi-spec.yaml)
+
           deck file add-plugins -s $DECK_API_PATH/deck-file/generated/kong-generated.yaml \
             $DECK_API_PATH/plugins/plugins.yaml \
           | deck file patch -s - common/patches/deck.yaml \
           | deck file patch -s - $DECK_API_PATH/patches/deck.yaml \
           | deck file add-tags -s - $DECK_API_NAME  \
+          | deck file add-tags -s - $DECK_API_VERSION \
           | deck file namespace -s - $DECK_API_NAME \
           > $DECK_API_PATH/deck-file/generated/kong-plugined-and-patched.yaml
       # TBA: Optional: deck file namespace
@@ -209,7 +212,8 @@ jobs:
               --konnect-addr "$KONNECT_ADDR" \
               --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
               --konnect-token "$KONNECT_TOKEN" \
-              --select-tag "$app" 
+              --select-tag "$DECK_API_NAME" \
+              --select-version "$DECK_API_VERSION"
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -288,7 +292,8 @@ jobs:
               --konnect-addr "$KONNECT_ADDR" \
               --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
               --konnect-token "$KONNECT_TOKEN" \
-              --select-tag "$app" 
+              --select-tag "$DECK_API_NAME" \
+              --select-version "$DECK_API_VERSION"
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
