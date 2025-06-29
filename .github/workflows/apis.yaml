@@ -184,6 +184,7 @@ jobs:
 
       - name: Diff all apps sequentially
         run: |
+          gh auth setup-git
           declare -a apps=("alice" "bob")
           for app in "${apps[@]}"; do
             echo "Processing diff for $app"
@@ -206,6 +207,8 @@ jobs:
               --select-tag "$app" \
               --select-tag "$DECK_OWNER"
           done
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   full_cp_dump:
     name: Backup Kong Control Plane State
