@@ -4,7 +4,7 @@ info:
   version: 1.0.0
 
 servers:
-  - url: placeholder
+  - url: https://placeholder.com
 
 components:
   securitySchemes:
