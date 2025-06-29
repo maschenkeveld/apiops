@@ -1,130 +1,130 @@
-name: Stage changes for Kong
+# name: Stage changes for Kong
 
-on:
-  push:
-    branches:
-      - main
-  workflow_dispatch:
+# on:
+#   push:
+#     branches:
+#       - main
+#   workflow_dispatch:
 
-env:
-  KONNECT_ADDR: https://eu.api.konghq.com
-  KONNECT_CONTROL_PLANE_NAME: apiops
-  KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+# env:
+#   KONNECT_ADDR: https://eu.api.konghq.com
+#   KONNECT_CONTROL_PLANE_NAME: apiops
+#   KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
-jobs:
-  has-changes:
-    name: Detect changes in relevant files
-    runs-on: self-hosted
-    outputs:
-      are-changes: ${{ steps.changed-files.outputs.global }}
-    steps:
-      - uses: actions/checkout@v3
+# jobs:
+#   has-changes:
+#     name: Detect changes in relevant files
+#     runs-on: self-hosted
+#     outputs:
+#       are-changes: ${{ steps.changed-files.outputs.global }}
+#     steps:
+#       - uses: actions/checkout@v3
 
-      - uses: dorny/paths-filter@v2
-        id: changed-files
-        with:
-          filters: |
-            global:
-              - 'global/**'
-              - 'common/**'
-              - 'deck-file/**'
-              - 'patches/**'
+#       - uses: dorny/paths-filter@v2
+#         id: changed-files
+#         with:
+#           filters: |
+#             global:
+#               - 'global/**'
+#               - 'common/**'
+#               - 'deck-file/**'
+#               - 'patches/**'
 
-  plugin_and_patch_kong_config:
-    name: Patch deck config
-    runs-on: self-hosted
-    needs: has-changes
-    if: needs.has-changes.outputs.are-changes == 'true'
-    strategy:
-      matrix:
-        component: [consumers, plugins]
-    steps:
-      - uses: actions/checkout@v3
+#   plugin_and_patch_kong_config:
+#     name: Patch deck config
+#     runs-on: self-hosted
+#     needs: has-changes
+#     if: needs.has-changes.outputs.are-changes == 'true'
+#     strategy:
+#       matrix:
+#         component: [consumers, plugins]
+#     steps:
+#       - uses: actions/checkout@v3
 
-      - name: Setup Environment
-        run: source env-vars/dev
+#       - name: Setup Environment
+#         run: source env-vars/dev
 
-      - name: Patch ${{ matrix.component }}
-        run: |
-          mkdir -p deck-file/generated
-          deck file patch \
-            -s deck-file/${{ matrix.component }}.yaml \
-            patches/${{ matrix.component }}.yaml \
-            > deck-file/generated/${{ matrix.component }}-patched.yaml
+#       - name: Patch ${{ matrix.component }}
+#         run: |
+#           mkdir -p deck-file/generated
+#           deck file patch \
+#             -s deck-file/${{ matrix.component }}.yaml \
+#             patches/${{ matrix.component }}.yaml \
+#             > deck-file/generated/${{ matrix.component }}-patched.yaml
 
-      - name: Upload Patched Artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ matrix.component }}-patched
-          path: deck-file/generated/${{ matrix.component }}-patched.yaml
+#       - name: Upload Patched Artifact
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: ${{ matrix.component }}-patched
+#           path: deck-file/generated/${{ matrix.component }}-patched.yaml
 
-  full-cp-dump:
-    name: Backup Kong CP state
-    runs-on: self-hosted
-    steps:
-      - uses: actions/checkout@v3
+#   full-cp-dump:
+#     name: Backup Kong CP state
+#     runs-on: self-hosted
+#     steps:
+#       - uses: actions/checkout@v3
 
-      - name: Dump Control Plane
-        run: |
-          mkdir -p backups
-          export TIMESTAMP=$(date +"%Y%m%d%H%M%S")
-          export DUMP_FILE=backups/kong-full-$TIMESTAMP.yaml
-          deck gateway dump \
-            --konnect-addr "$KONNECT_ADDR" \
-            --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
-            --konnect-token "$KONNECT_TOKEN" \
-            --yes \
-            -o "$DUMP_FILE"
-          echo "DUMP_FILE=$DUMP_FILE" >> $GITHUB_ENV
+#       - name: Dump Control Plane
+#         run: |
+#           mkdir -p backups
+#           export TIMESTAMP=$(date +"%Y%m%d%H%M%S")
+#           export DUMP_FILE=backups/kong-full-$TIMESTAMP.yaml
+#           deck gateway dump \
+#             --konnect-addr "$KONNECT_ADDR" \
+#             --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+#             --konnect-token "$KONNECT_TOKEN" \
+#             --yes \
+#             -o "$DUMP_FILE"
+#           echo "DUMP_FILE=$DUMP_FILE" >> $GITHUB_ENV
 
-      - name: Upload Kong CP Dump
-        uses: actions/upload-artifact@v4
-        with:
-          name: kong-full-dump
-          path: ${{ env.DUMP_FILE }}
+#       - name: Upload Kong CP Dump
+#         uses: actions/upload-artifact@v4
+#         with:
+#           name: kong-full-dump
+#           path: ${{ env.DUMP_FILE }}
 
-  diff:
-    name: Diff Kong config
-    runs-on: self-hosted
-    needs: plugin_and_patch_kong_config
-    strategy:
-      matrix:
-        component: [consumers, plugins]
-    steps:
-      - uses: actions/checkout@v3
+#   diff:
+#     name: Diff Kong config
+#     runs-on: self-hosted
+#     needs: plugin_and_patch_kong_config
+#     strategy:
+#       matrix:
+#         component: [consumers, plugins]
+#     steps:
+#       - uses: actions/checkout@v3
 
-      - name: Download Patched Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.component }}-patched
-          path: deck-file/generated
+#       - name: Download Patched Artifact
+#         uses: actions/download-artifact@v4
+#         with:
+#           name: ${{ matrix.component }}-patched
+#           path: deck-file/generated
 
-      - name: Deck Diff - ${{ matrix.component }}
-        run: |
-          deck gateway diff deck-file/generated/${{ matrix.component }}-patched.yaml \
-            --konnect-addr "$KONNECT_ADDR" \
-            --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
-            --konnect-token "$KONNECT_TOKEN"
+#       - name: Deck Diff - ${{ matrix.component }}
+#         run: |
+#           deck gateway diff deck-file/generated/${{ matrix.component }}-patched.yaml \
+#             --konnect-addr "$KONNECT_ADDR" \
+#             --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+#             --konnect-token "$KONNECT_TOKEN"
 
-  sync:
-    name: Sync Kong config
-    runs-on: self-hosted
-    needs: plugin_and_patch_kong_config
-    strategy:
-      matrix:
-        component: [consumers, plugins]
-    steps:
-      - uses: actions/checkout@v3
+#   sync:
+#     name: Sync Kong config
+#     runs-on: self-hosted
+#     needs: plugin_and_patch_kong_config
+#     strategy:
+#       matrix:
+#         component: [consumers, plugins]
+#     steps:
+#       - uses: actions/checkout@v3
 
-      - name: Download Patched Artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: ${{ matrix.component }}-patched
-          path: deck-file/generated
+#       - name: Download Patched Artifact
+#         uses: actions/download-artifact@v4
+#         with:
+#           name: ${{ matrix.component }}-patched
+#           path: deck-file/generated
 
-      - name: Deck Sync - ${{ matrix.component }}
-        run: |
-          deck gateway sync deck-file/generated/${{ matrix.component }}-patched.yaml \
-            --konnect-addr "$KONNECT_ADDR" \
-            --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
-            --konnect-token "$KONNECT_TOKEN"
+#       - name: Deck Sync - ${{ matrix.component }}
+#         run: |
+#           deck gateway sync deck-file/generated/${{ matrix.component }}-patched.yaml \
+#             --konnect-addr "$KONNECT_ADDR" \
+#             --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
+#             --konnect-token "$KONNECT_TOKEN"
