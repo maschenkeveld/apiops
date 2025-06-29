@@ -199,6 +199,7 @@ jobs:
             source "$path/env-vars/$KONNECT_CONTROL_PLANE_NAME"
 
             export DECK_API_NAME=$app
+            export DECK_API_VERSION=$(yq eval '.info.version' $path/openapi-spec/openapi-spec.yaml)
 
             echo "Running deck diff for $app"
             deck gateway diff $path/deck-file/generated/kong-plugined-and-patched.yaml \
@@ -206,8 +207,7 @@ jobs:
               --konnect-addr "$KONNECT_ADDR" \
               --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
               --konnect-token "$KONNECT_TOKEN" \
-              --select-tag "$app" \
-              --select-tag "$DECK_OWNER"
+              --select-tag "$app" 
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
@@ -277,6 +277,7 @@ jobs:
             source "$path/env-vars/$KONNECT_CONTROL_PLANE_NAME"
 
             export DECK_API_NAME=$app
+            export DECK_API_VERSION=$(yq eval '.info.version' $path/openapi-spec/openapi-spec.yaml)
 
             echo "Running deck sync for $app"
             deck gateway sync $path/deck-file/generated/kong-plugined-and-patched.yaml \
@@ -284,8 +285,7 @@ jobs:
               --konnect-addr "$KONNECT_ADDR" \
               --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
               --konnect-token "$KONNECT_TOKEN" \
-              --select-tag "$app" \
-              --select-tag "$DECK_OWNER"
+              --select-tag "$app" 
           done
 
 # TBA: Optional: Instead of a deck sync, a git push to a remote repository. For integration with GitOps.
