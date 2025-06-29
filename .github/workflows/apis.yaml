@@ -15,7 +15,7 @@ on:
   workflow_dispatch:
 
 env:
-  KONNECT_ADDR: https://konnect.kongtopia.pve-1.schenkeveld.io
+  KONNECT_ADDR: https://eu.api.konghq.com
   KONNECT_CONTROL_PLANE_NAME: kongtopia
   KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
