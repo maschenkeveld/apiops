@@ -1,2 +1,2 @@
-export DECK_BACKEND_HOSTNAME=bob.bob.svc.cluster.local
-export DECK_BACKEND_PORT=80
+export DECK_SERVICE_BACKEND_HOSTNAME=bob.bob.svc.cluster.local
+export DECK_SERVICE_BACKEND_PORT=80
