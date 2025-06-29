@@ -98,7 +98,11 @@ jobs:
 
 
   generate_kong_config:
+    name: Generate Kong Config
+    needs: oas-break
+    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     runs-on: self-hosted
+    
     strategy:
       matrix:
         app:
@@ -125,8 +129,11 @@ jobs:
           path: ${{ env.DECK_API_PATH }}/deck-file/generated/kong-generated.yaml
 
   plugin_and_patch_kong_config:
-    runs-on: self-hosted
+    name: Patch Kong Config with Plugins and Patches
     needs: generate_kong_config
+    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
+    runs-on: self-hosted
+
     strategy:
       matrix:
         app:
@@ -167,8 +174,11 @@ jobs:
           path: ${{ env.DECK_API_PATH }}/deck-file/generated/kong-plugined-and-patched.yaml
 
   diff:
-    runs-on: self-hosted
+    name: Diff Kong Config
+    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     needs: plugin_and_patch_kong_config
+    runs-on: self-hosted
+
     steps:
       - uses: actions/checkout@v2
 
@@ -198,6 +208,9 @@ jobs:
           done
 
   full-cp-dump:
+    name: Backup Kong Control Plane State
+    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
+    needs: diff
     runs-on: self-hosted
     steps:
       - name: Checkout repository
