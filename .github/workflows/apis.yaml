@@ -164,6 +164,7 @@ jobs:
           | deck file patch -s - common/patches/deck.yaml \
           | deck file patch -s - $DECK_API_PATH/patches/deck.yaml \
           | deck file add-tags -s - $DECK_API_NAME  \
+          | deck file namespace -s - $DECK_API_NAME \
           > $DECK_API_PATH/deck-file/generated/kong-plugined-and-patched.yaml
       # TBA: Optional: deck file namespace
 
@@ -261,7 +262,7 @@ jobs:
     steps:
       - uses: actions/checkout@v2
 
-      - name: Diff all apps sequentially
+      - name: Sync all apps sequentially
         run: |
           gh auth setup-git
           declare -a apps=("alice" "bob")
