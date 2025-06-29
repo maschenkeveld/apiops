@@ -207,7 +207,7 @@ jobs:
               --select-tag "$DECK_OWNER"
           done
 
-  full-cp-dump:
+  full_cp_dump:
     name: Backup Kong Control Plane State
     if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     needs: diff
@@ -247,8 +247,11 @@ jobs:
   # TBA: render
 
   sync:
+    name: Sync Kong Config to Control Plane
+    needs: full_cp_dump
+    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     runs-on: self-hosted
-    needs: plugin_and_patch_kong_config
+    
     steps:
       - uses: actions/checkout@v2
 
