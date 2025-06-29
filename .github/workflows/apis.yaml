@@ -204,7 +204,7 @@ jobs:
 
             echo "Running deck diff for $app"
             deck gateway diff $path/deck-file/generated/kong-plugined-and-patched.yaml \
-              common/plugin-templates/opentelemetry.yaml \
+              common/plugin-templates/plugin-templates.yaml \
               --konnect-addr "$KONNECT_ADDR" \
               --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
               --konnect-token "$KONNECT_TOKEN" \
@@ -283,7 +283,7 @@ jobs:
 
             echo "Running deck sync for $app"
             deck gateway sync $path/deck-file/generated/kong-plugined-and-patched.yaml \
-              common/plugin-templates/opentelemetry.yaml \
+              common/plugin-templates/plugin-templates.yaml \
               --konnect-addr "$KONNECT_ADDR" \
               --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
               --konnect-token "$KONNECT_TOKEN" \
