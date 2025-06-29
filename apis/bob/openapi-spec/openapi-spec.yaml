@@ -4,7 +4,7 @@ info:
   version: 1.0.0
 
 servers:
-  - url: kong-proxy-dp-konnect-eu-apiops-development.shared.pve-1.schenkeveld.io
+  - url: placeholder
 
 components:
   securitySchemes:
