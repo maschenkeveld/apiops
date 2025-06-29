@@ -16,7 +16,7 @@ on:
 
 env:
   KONNECT_ADDR: https://eu.api.konghq.com
-  KONNECT_CONTROL_PLANE_NAME: apiops
+  KONNECT_CONTROL_PLANE_NAME: apiops-development
   KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
 jobs:
@@ -251,7 +251,7 @@ jobs:
     needs: full_cp_dump
     if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     runs-on: self-hosted
-    
+
     steps:
       - uses: actions/checkout@v2
 
