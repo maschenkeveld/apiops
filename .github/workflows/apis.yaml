@@ -197,6 +197,7 @@ jobs:
 
             echo "Sourcing env vars"
             source "$path/env-vars/$KONNECT_CONTROL_PLANE_NAME"
+            source "common/env-vars/$KONNECT_CONTROL_PLANE_NAME"
 
             export DECK_API_NAME=$app
             export DECK_API_VERSION=$(yq eval '.info.version' $path/openapi-spec/openapi-spec.yaml)
@@ -275,6 +276,7 @@ jobs:
 
             echo "Sourcing env vars"
             source "$path/env-vars/$KONNECT_CONTROL_PLANE_NAME"
+            source "common/env-vars/$KONNECT_CONTROL_PLANE_NAME"
 
             export DECK_API_NAME=$app
             export DECK_API_VERSION=$(yq eval '.info.version' $path/openapi-spec/openapi-spec.yaml)
