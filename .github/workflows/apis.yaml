@@ -155,7 +155,7 @@ jobs:
           path: ${{ env.DECK_API_PATH }}/deck-file/generated
 
       - name: Setup Environment Variables
-        run: source $DECK_API_PATH/env-vars/env-vars
+        run: source $DECK_API_PATH/env-vars/$KONNECT_CONTROL_PLANE_NAME
 
       - name: Patch Kong Config with Plugins
         run: |
@@ -195,7 +195,7 @@ jobs:
             gh run download --name "$artifact_name" --dir "$path/deck-file/generated"
 
             echo "Sourcing env vars"
-            source "$path/env-vars/env-vars"
+            source "$path/env-vars/$KONNECT_CONTROL_PLANE_NAME"
 
             echo "Running deck diff for $app"
             deck gateway diff $path/deck-file/generated/kong-plugined-and-patched.yaml \
@@ -268,7 +268,7 @@ jobs:
             gh run download --name "$artifact_name" --dir "$path/deck-file/generated"
 
             echo "Sourcing env vars"
-            source "$path/env-vars/env-vars"
+            source "$path/env-vars/$KONNECT_CONTROL_PLANE_NAME"
 
             echo "Running deck diff for $app"
             deck gateway sync $path/deck-file/generated/kong-plugined-and-patched.yaml \

@@ -1,0 +1,1 @@
+export DECK_DATAPLANE_HOSTNAME="kong-proxy-dp-konnect-eu-apiops-development.shared.pve-1.schenkeveld.io"

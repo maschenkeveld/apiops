@@ -5,4 +5,4 @@ patches:
   - "$..services[*].routes[*]"
   values:
     hosts: 
-      - ${{ env "DECK_HOSTNAME" }}
+      - ${{ env "DECK_DATAPLANE_HOSTNAME" }}
