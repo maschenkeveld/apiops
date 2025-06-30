@@ -53,7 +53,7 @@ jobs:
   oas-break:
     name: Check breaking changes
     needs: has-changes
-    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
+    # if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     runs-on: self-hosted
 
     strategy:
@@ -100,7 +100,7 @@ jobs:
   generate_kong_config:
     name: Generate Kong Config
     needs: oas-break
-    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
+    # if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     runs-on: self-hosted
     
     strategy:
@@ -131,7 +131,7 @@ jobs:
   plugin_and_patch_kong_config:
     name: Patch Kong Config with Plugins and Patches
     needs: generate_kong_config
-    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
+    # if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     runs-on: self-hosted
 
     strategy:
@@ -179,7 +179,7 @@ jobs:
 
   diff:
     name: Diff Kong Config
-    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
+    # if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     needs: plugin_and_patch_kong_config
     runs-on: self-hosted
 
@@ -213,14 +213,14 @@ jobs:
               --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
               --konnect-token "$KONNECT_TOKEN" \
               --select-tag "$DECK_API_NAME" \
-              --select-version "$DECK_API_VERSION"
+              --select-tag "$DECK_API_VERSION"
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   full_cp_dump:
     name: Backup Kong Control Plane State
-    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
+    # if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     needs: diff
     runs-on: self-hosted
     steps:
@@ -260,7 +260,7 @@ jobs:
   sync:
     name: Sync Kong Config to Control Plane
     needs: full_cp_dump
-    if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
+    # if: ${{ needs.has-changes.outputs.are-changes == 'true' }}
     runs-on: self-hosted
 
     steps:
@@ -293,7 +293,7 @@ jobs:
               --konnect-control-plane-name "$KONNECT_CONTROL_PLANE_NAME" \
               --konnect-token "$KONNECT_TOKEN" \
               --select-tag "$DECK_API_NAME" \
-              --select-version "$DECK_API_VERSION"
+              --select-tag "$DECK_API_VERSION"
           done
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
