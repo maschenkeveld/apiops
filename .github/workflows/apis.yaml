@@ -159,7 +159,7 @@ jobs:
 
       - name: Patch Kong Config with Plugins
         run: |
-          export DECK_API_VERSION=$(yq eval '.info.version' $DECK_API_PATH/openapi-spec/openapi-spec.yaml)
+          export DECK_API_VERSION=$(yq eval '.info.version | capture("^(?<major>\\d+)") | "v\(.major)"' "$DECK_API_PATH/openapi-spec/openapi-spec.yaml")
 
           deck file add-plugins -s $DECK_API_PATH/deck-file/generated/kong-generated.yaml \
             $DECK_API_PATH/plugins/plugins.yaml \
@@ -204,7 +204,7 @@ jobs:
             source "common/env-vars/$KONNECT_CONTROL_PLANE_NAME"
 
             export DECK_API_NAME=$app
-            export DECK_API_VERSION=$(yq eval '.info.version' $path/openapi-spec/openapi-spec.yaml)
+            export DECK_API_VERSION=$(yq eval '.info.version | capture("^(?<major>\\d+)") | "v\(.major)"' "$path/openapi-spec/openapi-spec.yaml")
 
             echo "Running deck diff for $app"
             deck gateway diff $path/deck-file/generated/kong-plugined-and-patched.yaml \
@@ -284,7 +284,7 @@ jobs:
             source "common/env-vars/$KONNECT_CONTROL_PLANE_NAME"
 
             export DECK_API_NAME=$app
-            export DECK_API_VERSION=$(yq eval '.info.version' $path/openapi-spec/openapi-spec.yaml)
+            export DECK_API_VERSION=$(yq eval '.info.version | capture("^(?<major>\\d+)") | "v\(.major)"' "$path/openapi-spec/openapi-spec.yaml")
 
             echo "Running deck sync for $app"
             deck gateway sync $path/deck-file/generated/kong-plugined-and-patched.yaml \
