@@ -1,0 +1,1 @@
+export DECK_DATAPLANE_HOSTNAME="kong-proxy-dp-konnect-eu-mink-mesh-a.mink-zone-a.pve-1.schenkeveld.io"

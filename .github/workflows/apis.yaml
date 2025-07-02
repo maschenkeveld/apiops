@@ -16,7 +16,7 @@ on:
 
 env:
   KONNECT_ADDR: https://eu.api.konghq.com
-  KONNECT_CONTROL_PLANE_NAME: apiops-development
+  KONNECT_CONTROL_PLANE_NAME: mink-mesh-a     # THIS ALSO REPRESENTS THE ENVIRONMENT NAME
   KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
 jobs:
@@ -299,6 +299,16 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 # TBA: Optional: Instead of a deck sync, a git push to a remote repository. For integration with GitOps.
+
+
+
+
+# KONG API Builder, see localtest.sh
+
+
+
+
+
 
   # contract-test:
   #   name: Contract testing
