@@ -1,0 +1,2 @@
+export DECK_SERVICE_BACKEND_HOSTNAME=eddy.eddy.svc.cluster.local
+export DECK_SERVICE_BACKEND_PORT=80

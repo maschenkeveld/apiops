@@ -1,0 +1,149 @@
+openapi: 3.0.0
+info:
+  title: eddy
+  version: 1.0.0
+
+servers:
+  - url: https://placeholder.com/
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: apikey
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    OAuth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://keycloak.schenkeveld.io/realms/kong/protocol/openid-connect/token
+          scopes: 
+            openid: OpenID
+            profile: Profile
+  schemas:
+    Upstream:
+      type: object
+      properties:
+        host:
+          type: string
+        upstreams:
+          type: array
+          items:
+            $ref: '#/components/schemas/Upstream'
+
+    CrawlResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        name:
+          type: string
+        zone:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        incomingHeaders:
+          type: object
+          additionalProperties:
+            type: string
+        upstreamResponses:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrawlResponse'
+
+    IdentifyResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        name:
+          type: string
+        zone:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        incomingHeaders:
+          type: object
+          additionalProperties:
+            type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+
+# security:
+#   - ApiKeyAuth: []
+#   - BearerAuth: []
+#   - OAuth2: []
+
+paths:
+  /metrics:
+    get:
+      summary: Get metrics
+      # security:
+      #   - ApiKeyAuth: []
+      #   - BearerAuth: []
+      responses:
+        '200':
+          description: Successful response
+
+  /health:
+    get:
+      summary: Health Endpoint
+      # security:
+      #   - ApiKeyAuth: []
+      #   - BearerAuth: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /identify:
+    get:
+      summary: Identify Endpoint
+      # security:
+      #   - ApiKeyAuth: []
+      #   - BearerAuth: []
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentifyResponse'
+
+  /crawl:
+    post:
+      summary: Crawl Endpoint
+      # security:
+      #   - ApiKeyAuth: []
+      #   - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                upstreams:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Upstream'
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrawlResponse'

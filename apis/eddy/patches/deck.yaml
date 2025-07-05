@@ -1,0 +1,9 @@
+---
+_format_version: '1.0'
+patches:
+- selectors:
+  - "$..services[*]"
+  values:
+    host: ${{ env "DECK_SERVICE_BACKEND_HOSTNAME" }}
+    protocol: http
+    port: ${{ env "DECK_SERVICE_BACKEND_PORT" }}
