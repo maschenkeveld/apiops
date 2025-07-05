@@ -123,7 +123,7 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: kong-generated-${{ matrix.app.name }}.yaml
-          path: api/${{ matrix.app.name }}/deck-file/generated/kong-generated.yaml
+          path: apis/${{ matrix.app.name }}/deck-file/generated/kong-generated.yaml
 
   plugin_and_patch_kong_config:
     name: Patch Kong Config with Plugins and Patches
@@ -147,34 +147,34 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: kong-generated-${{ matrix.app.name }}.yaml
-          path: api/${{ matrix.app.name }}/deck-file/generated
+          path: apis/${{ matrix.app.name }}/deck-file/generated
 
       - name: Rename downloaded file
         run: |
-          mv api/${{ matrix.app.name }}/deck-file/generated/kong-generated-${{ matrix.app.name }}.yaml \
-            api/${{ matrix.app.name }}/deck-file/generated/kong-generated.yaml
+          mv apis/${{ matrix.app.name }}/deck-file/generated/kong-generated-${{ matrix.app.name }}.yaml \
+            apis/${{ matrix.app.name }}/deck-file/generated/kong-generated.yaml
 
       - name: Setup Environment Variables
-        run: source api/${{ matrix.app.name }}/env-vars/$KONNECT_CONTROL_PLANE_NAME
+        run: source apis/${{ matrix.app.name }}/env-vars/$KONNECT_CONTROL_PLANE_NAME
 
       - name: Patch Kong Config with Plugins
         run: |
-          export DECK_API_VERSION=$(yq eval '.info.version | capture("^(?<major>\\d+)") | "v\(.major)"' "api/${{ matrix.app.name }}/openapi-spec/openapi-spec.yaml")
+          export DECK_API_VERSION=$(yq eval '.info.version | capture("^(?<major>\\d+)") | "v\(.major)"' "apis/${{ matrix.app.name }}/openapi-spec/openapi-spec.yaml")
 
-          deck file add-plugins -s api/${{ matrix.app.name }}/deck-file/generated/kong-generated.yaml \
-            api/${{ matrix.app.name }}/plugins/plugins.yaml \
+          deck file add-plugins -s apis/${{ matrix.app.name }}/deck-file/generated/kong-generated.yaml \
+            apis/${{ matrix.app.name }}/plugins/plugins.yaml \
           | deck file patch -s - common/patches/deck.yaml \
-          | deck file patch -s - api/${{ matrix.app.name }}/patches/deck.yaml \
+          | deck file patch -s - apis/${{ matrix.app.name }}/patches/deck.yaml \
           | deck file add-tags -s - $DECK_API_NAME  \
           | deck file add-tags -s - $DECK_API_VERSION \
           | deck file namespace -s - --path-prefix=/$DECK_API_NAME/$DECK_API_VERSION \
-          > api/${{ matrix.app.name }}/deck-file/generated/kong-plugined-and-patched.yaml
+          > apis/${{ matrix.app.name }}/deck-file/generated/kong-plugined-and-patched.yaml
 
       - name: Upload Kong Plugined and Patched Config
         uses: actions/upload-artifact@v4
         with:
           name: kong-plugined-and-patched-${{ matrix.app.name }}.yaml
-          path: api/${{ matrix.app.name }}/deck-file/generated/kong-plugined-and-patched.yaml
+          path: apis/${{ matrix.app.name }}/deck-file/generated/kong-plugined-and-patched.yaml
 
   diff:
     name: Diff Kong Config
