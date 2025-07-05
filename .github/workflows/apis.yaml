@@ -149,6 +149,11 @@ jobs:
           name: kong-generated-${{ matrix.app.name }}.yaml
           path: apis/${{ matrix.app.name }}/deck-file/generated
 
+      - name: list
+        run: |
+          ls apis/${{ matrix.app.name }}/deck-file/generated
+
+
       - name: Rename downloaded file
         run: |
           mv apis/${{ matrix.app.name }}/deck-file/generated/kong-generated-${{ matrix.app.name }}.yaml \
