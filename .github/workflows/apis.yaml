@@ -147,7 +147,7 @@ jobs:
         uses: actions/download-artifact@v4
         with:
           name: kong-generated-${{ matrix.app.name }}.yaml
-          # path: apis/${{ matrix.app.name }}/deck-file/generated
+          path: apis/${{ matrix.app.name }}/deck-file/generated
 
       - name: list
         run: |
