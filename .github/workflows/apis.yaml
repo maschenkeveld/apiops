@@ -60,9 +60,8 @@ jobs:
       matrix:
         app:
           - name: alice
-            path: apis/alice/openapi-spec
           - name: bob
-            path: apis/bob/openapi-spec
+          - name: eddy
 
     steps:
       - name: Checkout
@@ -72,19 +71,19 @@ jobs:
 
       - name: Base OAS
         run: |
-          if git show HEAD~1:${{ matrix.app.path }}/openapi-spec.yaml > /dev/null 2>&1; then
-            git show HEAD~1:${{ matrix.app.path }}/openapi-spec.yaml > ${{ matrix.app.path }}/base.yaml
+          if git show HEAD~1:apis/${{ matrix.app.name }}/openapi-spec/openapi-spec.yaml > /dev/null 2>&1; then
+            git show HEAD~1:apis/${{ matrix.app.name }}/openapi-spec/openapi-spec.yaml > apis/${{ matrix.app.name }}/openapi-spec/base.yaml
           else
             echo "No previous version of OAS found. Creating empty base.yaml."
-            touch ${{ matrix.app.path }}/base.yaml
+            touch apis/${{ matrix.app.name }}/openapi-spec/base.yaml
           fi
 
       - name: Check OAS breaking changes
         uses: oasdiff/oasdiff-action/breaking@main
         id: oasdiff
         with:
-          base: ${{ matrix.app.path }}/base.yaml
-          revision: ${{ matrix.app.path }}/openapi-spec.yaml
+          base: apis/${{ matrix.app.name }}/openapi-spec/base.yaml
+          revision: apis/${{ matrix.app.name }}/openapi-spec/openapi-spec.yaml
 
       - name: Create Issue on Breaking Change
         if: steps.oasdiff.outputs.breaking != 'No breaking changes'
@@ -107,12 +106,11 @@ jobs:
       matrix:
         app:
           - name: alice
-            path: apis/alice
           - name: bob
-            path: apis/bob
+          - name: eddy
     env:
       DECK_API_NAME: ${{ matrix.app.name }}
-      DECK_API_PATH: ${{ matrix.app.path }}
+      DECK_API_PATH: apis/${{ matrix.app.name }}/openapi-spec
 
     steps:
       - uses: actions/checkout@v2
@@ -138,12 +136,11 @@ jobs:
       matrix:
         app:
           - name: alice
-            path: apis/alice
           - name: bob
-            path: apis/bob
+          - name: eddy
     env:
       DECK_API_NAME: ${{ matrix.app.name }}
-      DECK_API_PATH: ${{ matrix.app.path }}
+      DECK_API_PATH: apis/${{ matrix.app.name }}/openapi-spec
 
     steps:
       - uses: actions/checkout@v2
@@ -189,7 +186,7 @@ jobs:
       - name: Diff all apps sequentially
         run: |
           gh auth setup-git
-          declare -a apps=("alice" "bob")
+          declare -a apps=("alice" "bob" "eddy")
           for app in "${apps[@]}"; do
             echo "Processing diff for $app"
             path="apis/$app"
@@ -269,7 +266,7 @@ jobs:
       - name: Sync all apps sequentially
         run: |
           gh auth setup-git
-          declare -a apps=("alice" "bob")
+          declare -a apps=("alice" "bob" "eddy")
           for app in "${apps[@]}"; do
             echo "Processing sync for $app"
             path="apis/$app"
