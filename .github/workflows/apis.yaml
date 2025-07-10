@@ -162,7 +162,7 @@ jobs:
           | deck file patch -s - apis/${{ matrix.app.name }}/patches/deck.yaml \
           | deck file add-tags -s - $DECK_API_NAME  \
           | deck file add-tags -s - $DECK_API_VERSION \
-          | deck file namespace -s - --path-prefix=/$DECK_API_NAME/$DECK_API_VERSION \
+          | deck file namespace -s - --path-prefix=/$DECK_API_NAME \
           > apis/${{ matrix.app.name }}/deck-file/generated/kong-plugined-and-patched.yaml
 
       - name: Upload Kong Plugined and Patched Config
