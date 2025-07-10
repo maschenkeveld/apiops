@@ -2,7 +2,7 @@
 #!/bin/bash
 
 # Variables
-TOKEN="kpat_ct0GEm09jMtlwvPfkqxOfe38TgZ80VdOU4kfVQBBb48AHaZi1"
+TOKEN=""
 ORG_ID="1b2f5a87-d65a-4d30-8a97-3a4b788e3178"
 API_NAME="bob"
 API_VERSION="v1"

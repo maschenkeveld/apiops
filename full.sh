@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Variables
-TOKEN="kpat_ct0GEm09jMtlwvPfkqxOfe38TgZ80VdOU4kfVQBBb48AHaZi1"                              # SHOULD COME FROM A SECRET
+TOKEN=""                              # SHOULD COME FROM A SECRET
 ORG_ID="1b2f5a87-d65a-4d30-8a97-3a4b788e3178"                                               # THIS IS A FIXED VALUE
 PORTAL_ID="69a568c9-09b5-49aa-847a-3c057095e963"                                            # HERE WE WILL NEED THE PORTAL ID WHERE THE API WILL BE PUBLISHED 
 API_HOST="https://eu.api.konghq.com"                                                        # THIS IS A FIXED VALUE
