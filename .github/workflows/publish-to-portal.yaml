@@ -1,0 +1,129 @@
+name: Publish to Dev Portal
+# Reusable workflow: for each API in apps_list, publishes the API to the Konnect Dev Portal.
+# Runs from trigger-release.yaml only (production), after the gateway deploy + verify succeed.
+#
+# The portal itself is provisioned by PlatformOps (konnect-eu-apiops-production), which writes
+# the portal ID to Vault. This workflow reads that ID from Vault and hands it to scripts/publish-api.sh.
+#
+# Per app, scripts/publish-api.sh:
+#   1. upserts the API + uploads its OpenAPI spec to the Konnect API registry
+#   2. uploads every apis/<app>/md-files/*.md as an API document
+#   3. publishes the API to the portal
+#   4. links the API to its running gateway service (creates an implementation)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to publish for (production)'
+        required: true
+        type: string
+      apps_list:
+        description: 'Space-separated list of apps to publish'
+        required: true
+        type: string
+      vault_addr:
+        description: 'Secrets backend address (OpenBao, Vault-API-compatible)'
+        required: false
+        type: string
+        default: 'https://openbao.shared.pve-home.schenkeveld.io'
+      vault_portal_path:
+        description: 'Vault KV v2 API path holding portal-details (portal_id)'
+        required: false
+        type: string
+        default: 'kv/data/konnect/konnect-eu-apiops-portal/portal-details'
+    secrets:
+      KONNECT_TOKEN:
+        description: 'Kong Konnect API token'
+        required: true
+      VAULT_TOKEN:
+        description: 'Vault token used to read the portal ID written by PlatformOps'
+        required: true
+
+env:
+  KONNECT_ADDR: https://eu.api.konghq.com
+  KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+jobs:
+  setup-environment:
+    name: Setup Environment + Read Portal ID
+    runs-on: ubuntu-latest
+    outputs:
+      control_plane_name: ${{ steps.set-control-plane.outputs.control_plane_name }}
+      apps_matrix: ${{ steps.generate-matrix.outputs.apps_matrix }}
+      portal_id: ${{ steps.read-portal.outputs.portal_id }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set control plane name
+        id: set-control-plane
+        run: echo "control_plane_name=$(./scripts/control-plane.sh ${{ inputs.environment }})" >> $GITHUB_OUTPUT
+
+      - name: Read portal ID from OpenBao
+        id: read-portal
+        # Shared script — reads portal_id from OpenBao (same one a maintainer can run locally).
+        env:
+          VAULT_ADDR: ${{ inputs.vault_addr }}
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+          VAULT_PORTAL_PATH: ${{ inputs.vault_portal_path }}
+        run: echo "portal_id=$(./scripts/portal-id.sh)" >> $GITHUB_OUTPUT
+
+      - name: Generate apps matrix
+        id: generate-matrix
+        run: |
+          APPS_TO_PUBLISH="${{ inputs.apps_list }}"
+          echo "📋 Apps to publish for ${{ inputs.environment }}: $APPS_TO_PUBLISH"
+          apps_array=$(echo "$APPS_TO_PUBLISH" | tr ' ' '\n' | jq -R . | jq -s -c .)
+          matrix_json="{\"app\":$apps_array}"
+          echo "apps_matrix=$matrix_json" >> $GITHUB_OUTPUT
+          echo "Generated matrix: $matrix_json"
+
+  publish-app:
+    name: Publish App to Portal
+    needs: setup-environment
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.setup-environment.outputs.apps_matrix) }}
+    env:
+      CONTROL_PLANE_NAME: ${{ needs.setup-environment.outputs.control_plane_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install redocly CLI
+        run: npm i -g @redocly/cli@latest
+
+      - name: Install yq
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Publish API to portal
+        # Shared script — same one the local runner uses (make publish). Bundles the spec,
+        # then runs scripts/publish-api.sh (upsert + docs + publish + gateway link).
+        env:
+          PORTAL_ID: ${{ needs.setup-environment.outputs.portal_id }}
+        run: ./scripts/publish.sh ${{ matrix.app }} ${{ env.CONTROL_PLANE_NAME }}
+
+  portal-summary:
+    name: Portal Publish Summary
+    needs: [setup-environment, publish-app]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Create Portal Summary
+        run: |
+          echo "# 📡 Dev Portal Publish Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Control Plane:** ${{ needs.setup-environment.outputs.control_plane_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Apps Published:** ${{ inputs.apps_list }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Publish Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.publish-app.result }}" == "success" ]]; then
+            echo "## ✅ All APIs published to the portal" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Some APIs failed to publish" >> $GITHUB_STEP_SUMMARY
+            echo "Check the individual job logs for details." >> $GITHUB_STEP_SUMMARY
+          fi

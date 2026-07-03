@@ -1,0 +1,200 @@
+name: Deploy to Production
+# Deploys to the production Konnect control plane when a release branch is pushed.
+# Release branches follow the pattern: release/<version> or releases/<version>
+# e.g. release/2.1.0 triggers a production deployment and records "2.1.0" as the release version.
+on:
+  push:
+    branches:
+      - 'release/**'
+      - 'releases/**'
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  ENVIRONMENT: production
+
+jobs:
+  check-release-branch:
+    name: Check if Release Branch
+    runs-on: ubuntu-latest
+    outputs:
+      is-release: ${{ steps.check.outputs.is-release }}
+      version: ${{ steps.version.outputs.version }}
+      production-apps-list: ${{ steps.set-apps.outputs.production-apps-list }}
+
+    steps:
+      - name: Check if this is a release branch
+        id: check
+        run: |
+          # Guard: only proceed if the push is to a release/* or releases/* branch.
+          # This check is redundant given the on.push filter above, but provides a
+          # clear gate that downstream jobs can depend on via is-release output.
+          if [[ "${{ github.ref }}" == refs/heads/release* ]] || [[ "${{ github.ref }}" == refs/heads/releases* ]]; then
+            echo "is-release=true" >> $GITHUB_OUTPUT
+            echo "This is a release branch: ${{ github.ref }}"
+          else
+            echo "is-release=false" >> $GITHUB_OUTPUT
+            echo "This is not a release branch: ${{ github.ref }}"
+          fi
+
+      - name: Extract release version
+        id: version
+        if: steps.check.outputs.is-release == 'true'
+        run: |
+          # Strips the release/ or releases/ prefix to get a bare version string.
+          # e.g. release/2.1.0 → 2.1.0
+          BRANCH_NAME=${{ github.ref_name }}
+          VERSION=${BRANCH_NAME#release/}
+          VERSION=${VERSION#releases/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "Release version: $VERSION"
+
+      - name: Set production apps list
+        id: set-apps
+        run: |
+          # Space-separated list of APIs to deploy to production.
+          # Each name must correspond to a folder under apis/.
+          PRODUCTION_APPS="company domain domain-users portal portal-users"
+          echo "production-apps-list=$PRODUCTION_APPS" >> $GITHUB_OUTPUT
+          echo "Production apps list: $PRODUCTION_APPS"
+
+  kong-pipeline:
+    name: Validate APIs
+    needs: check-release-branch
+    if: needs.check-release-branch.outputs.is-release == 'true'
+    uses: ./.github/workflows/validate-apis.yaml
+    with:
+      apps_list: ${{ needs.check-release-branch.outputs.production-apps-list }}
+
+  deck-lint:
+    name: Lint Deck Config
+    needs: check-release-branch
+    if: needs.check-release-branch.outputs.is-release == 'true'
+    # Blocking gate: lint the generated deck config before any write to production Konnect.
+    uses: ./.github/workflows/lint-deck.yaml
+    with:
+      apps_list: ${{ needs.check-release-branch.outputs.production-apps-list }}
+
+  kong-backup:
+    name: Backup Kong State
+    needs: [check-release-branch, kong-pipeline, deck-lint]
+    if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-pipeline.result == 'success' && needs.deck-lint.result == 'success'
+    uses: ./.github/workflows/backup-kong-control-plane.yaml
+    with:
+      environment: "production"
+      control_plane_name: "apiops-production"
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+  kong-global:
+    name: Deploy Global Components to Production
+    needs: [check-release-branch, kong-pipeline, kong-backup]
+    if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success'
+    uses: ./.github/workflows/deploy-global-components.yaml
+    with:
+      environment: production
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+  kong-deploy:
+    name: Deploy to Kong Production
+    needs: [check-release-branch, kong-pipeline, kong-backup, kong-global]
+    if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success' && needs.kong-global.result == 'success'
+    uses: ./.github/workflows/deploy-apis.yaml
+    with:
+      environment: production
+      apps_list: ${{ needs.check-release-branch.outputs.production-apps-list }}
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+  kong-verify:
+    name: Verify Kong Production Deployment
+    needs: [check-release-branch, kong-pipeline, kong-backup, kong-global, kong-deploy]
+    if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-deploy.result == 'success'
+    uses: ./.github/workflows/verify-deployment.yaml
+    with:
+      environment: production
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+  documentation:
+    name: Generate Release Documentation
+    needs: [check-release-branch, kong-pipeline, kong-backup, kong-global, kong-deploy, kong-verify]
+    if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-verify.result == 'success'
+    uses: ./.github/workflows/generate-and-publish-documentation.yaml
+    with:
+      environment: production
+      apps_list: ${{ needs.check-release-branch.outputs.production-apps-list }}
+
+  kong-portal:
+    name: Publish to Dev Portal
+    needs: [check-release-branch, kong-pipeline, kong-backup, kong-global, kong-deploy, kong-verify]
+    # Publish to the portal only after the gateway deploy is verified, so the implementation
+    # link always points at a live service. Portal publishing is production-only.
+    if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-verify.result == 'success'
+    uses: ./.github/workflows/publish-to-portal.yaml
+    with:
+      environment: production
+      apps_list: ${{ needs.check-release-branch.outputs.production-apps-list }}
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+      VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+
+  release-summary:
+    name: Release Summary
+    needs: [check-release-branch, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, documentation, kong-portal]
+    if: needs.check-release-branch.outputs.is-release == 'true'
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Release deployment summary
+        run: |
+          echo "# 🚀 Release Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Details:**" >> $GITHUB_STEP_SUMMARY
+          echo "- Release Branch: ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Release Version: ${{ needs.check-release-branch.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Environment: ${{ env.ENVIRONMENT }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Control Plane: apiops-production" >> $GITHUB_STEP_SUMMARY
+          echo "- Deployment Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          echo "**Pipeline Results:**" >> $GITHUB_STEP_SUMMARY
+          echo "| Stage | Status | Description |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|-------------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Kong Pipeline | ${{ needs.kong-pipeline.result == 'success' && '✅ Success' || '❌ Failed' }} | API validation and breaking changes check |" >> $GITHUB_STEP_SUMMARY
+          echo "| Deck Lint | ${{ needs.deck-lint.result == 'success' && '✅ Success' || '❌ Failed' }} | Deck config linting (shared/deck-linting) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kong Backup | ${{ needs.kong-backup.result == 'success' && '✅ Success' || '❌ Failed' }} | Production control plane backup |" >> $GITHUB_STEP_SUMMARY
+          echo "| Global Components | ${{ needs.kong-global.result == 'success' && '✅ Success' || '❌ Failed' }} | Consumer groups, consumers, plugins |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kong Deploy | ${{ needs.kong-deploy.result == 'success' && '✅ Success' || '❌ Failed' }} | API deployment to production |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kong Verify | ${{ needs.kong-verify.result == 'success' && '✅ Success' || '❌ Failed' }} | Production deployment verification |" >> $GITHUB_STEP_SUMMARY
+          echo "| Documentation | ${{ needs.documentation.result == 'success' && '✅ Success' || '❌ Failed' }} | Release documentation generation |" >> $GITHUB_STEP_SUMMARY
+          echo "| Dev Portal | ${{ needs.kong-portal.result == 'success' && '✅ Success' || '❌ Failed' }} | APIs published to the developer portal |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          # Overall status
+          if [[ "${{ needs.kong-pipeline.result }}" == "success" && "${{ needs.deck-lint.result }}" == "success" && "${{ needs.kong-backup.result }}" == "success" && "${{ needs.kong-global.result }}" == "success" && "${{ needs.kong-deploy.result }}" == "success" && "${{ needs.kong-verify.result }}" == "success" && "${{ needs.documentation.result }}" == "success" && "${{ needs.kong-portal.result }}" == "success" ]]; then
+            echo "## ✅ Release deployment completed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "🎉 **Release ${{ needs.check-release-branch.outputs.version }}** has been successfully deployed to production." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**What was deployed:**" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ All API configurations validated and deployed" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Global components (consumers, plugins) updated" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Production environment verified and healthy" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ Documentation generated and updated" >> $GITHUB_STEP_SUMMARY
+            echo "- ✅ APIs published to the developer portal" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Release deployment failed" >> $GITHUB_STEP_SUMMARY
+            echo "⚠️ **Release ${{ needs.check-release-branch.outputs.version }}** deployment encountered errors." >> $GITHUB_STEP_SUMMARY
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "**Failed stages:** Please check the logs for the failed pipeline stages above." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Release Information:**" >> $GITHUB_STEP_SUMMARY
+          echo "- 🏷️ **Version:** ${{ needs.check-release-branch.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🌐 **Environment:** ${{ env.ENVIRONMENT }}" >> $GITHUB_STEP_SUMMARY
+          echo "- 🔗 **Control Plane:** apiops-production" >> $GITHUB_STEP_SUMMARY
+          echo "- 📅 **Release Date:** $(date -u '+%Y-%m-%d')" >> $GITHUB_STEP_SUMMARY

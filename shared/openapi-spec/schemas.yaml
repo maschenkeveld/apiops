@@ -1,0 +1,14 @@
+ProblemDetails:
+  $ref: './schemas/common/ProblemDetails.yaml#/ProblemDetails'
+ValidationProblemDetails:
+  $ref: './schemas/common/ValidationProblemDetails.yaml#/ValidationProblemDetails'
+BadRequestError:
+  $ref: './schemas/common/BadRequestError.yaml#/BadRequestError'
+ForbiddenError:
+  $ref: './schemas/common/ForbiddenError.yaml#/ForbiddenError'
+InternalServerError:
+  $ref: './schemas/common/InternalServerError.yaml#/InternalServerError'
+NotFoundError:
+  $ref: './schemas/common/NotFoundError.yaml#/NotFoundError'
+UnauthorizedError:
+  $ref: './schemas/common/UnauthorizedError.yaml#/UnauthorizedError'

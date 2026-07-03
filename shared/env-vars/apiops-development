@@ -1,0 +1,1 @@
+export DECK_DATAPLANE_HOSTNAME="kong-proxy.development.example.com"

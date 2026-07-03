@@ -1,0 +1,10 @@
+_format_version: "3.0"
+_info:
+  select_tags:
+    - global-consumer-groups
+
+consumer_groups:
+  - name: bronze
+  - name: gold
+  - name: silver
+

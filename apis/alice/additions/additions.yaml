@@ -1,0 +1,26 @@
+_format_version: '3.0'
+_info:
+  select_tags: # THIS SHOULD ALSO BE DYNAMICALLY SET
+    - alice
+    - v1
+  default_lookup_tags:
+    consumer_groups:
+      - global-consumer-groups
+    partials:
+      - global-redis
+plugins:
+  - name: rate-limiting-advanced
+    consumer_group: bronze
+    route: alice_getidentify
+    _config: shared-rate-limiting-advanced
+    partials:
+      - id: 7283b615-1315-480c-95b9-78b88e0e2f43 # THIS IS NOT VERY USER FRIENDLY, BETTER USE NAME-BASED LOOKUP
+  - name: rate-limiting-advanced
+    consumer_group: gold
+    route: alice_getidentify
+    _config: shared-rate-limiting-advanced
+    partials:
+      - id: 7283b615-1315-480c-95b9-78b88e0e2f43
+    config:
+      limit:
+        - 10

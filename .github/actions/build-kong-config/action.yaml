@@ -1,0 +1,56 @@
+name: Build Kong Config
+description: >
+  Build a Kong deck file for one API from its OpenAPI spec, applying additions, plugins,
+  shared + API-specific patches, tags and route namespacing. Shared by deploy-apis.yaml
+  (which then diffs/syncs it) and lint-deck.yaml (which then lints it).
+  The caller must have already run actions/checkout. Outputs the generated deck file at
+  apis/<app>/deck-file/generated/kong-plugined-and-patched.yaml.
+
+inputs:
+  app:
+    description: API name; must match the apis/<app> folder
+    required: true
+
+outputs:
+  config_file:
+    description: Path to the generated, patched deck file
+    value: apis/${{ inputs.app }}/deck-file/generated/kong-plugined-and-patched.yaml
+  api_version:
+    description: Major-version tag (e.g. v1) derived from the spec
+    value: ${{ steps.api-version.outputs.api_version }}
+
+runs:
+  using: composite
+  steps:
+    - name: Install redocly CLI
+      shell: bash
+      run: npm i -g @redocly/cli@latest
+
+    - name: Install deck
+      # Download the official deck release (linux/amd64) — GitHub-hosted runners are amd64.
+      shell: bash
+      run: |
+        DECK_VERSION=1.49.1
+        curl -sL "https://github.com/Kong/deck/releases/download/v${DECK_VERSION}/deck_${DECK_VERSION}_linux_amd64.tar.gz" -o deck.tar.gz
+        sudo tar -xzf deck.tar.gz -C /usr/local/bin deck
+        sudo chmod +x /usr/local/bin/deck
+
+    - name: Install yq
+      shell: bash
+      run: |
+        sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+        sudo chmod +x /usr/local/bin/yq
+
+    - name: Extract API version
+      id: api-version
+      shell: bash
+      run: |
+        API_VERSION=$(yq eval '.info.version | capture("^(?<major>\\d+)") | "v\(.major)"' \
+          "apis/${{ inputs.app }}/openapi-spec/openapi-spec.yaml")
+        echo "api_version=$API_VERSION" >> $GITHUB_OUTPUT
+        echo "API version tag: $API_VERSION"
+
+    - name: Build Kong Config
+      # Delegates to the shared build script so the local runner and CI build identically.
+      shell: bash
+      run: ./scripts/build.sh ${{ inputs.app }}

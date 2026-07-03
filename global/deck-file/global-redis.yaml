@@ -1,0 +1,27 @@
+_format_version: "3.0"
+partials:
+- config:
+    cluster_max_redirections: 5
+    cluster_nodes: null
+    connect_timeout: 2000
+    connection_is_proxied: false
+    database: 0
+    host: redis.example.com
+    keepalive_backlog: 0
+    keepalive_pool_size: 256
+    password: null
+    port: 6379
+    read_timeout: 2000
+    send_timeout: 2000
+    sentinel_master: null
+    sentinel_nodes: null
+    sentinel_password: null
+    sentinel_role: null
+    sentinel_username: null
+    server_name: null
+    ssl: false
+    ssl_verify: false
+    username: null
+  id: 7283b615-1315-480c-95b9-78b88e0e2f43
+  name: shared-redis
+  type: redis-ee

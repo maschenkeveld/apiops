@@ -1,0 +1,17 @@
+---
+_format_version: '1.0'
+add-plugins:
+- selectors:
+  - "$..services[*]"
+  overwrite: false
+  plugins:
+    - name: openid-connect
+      _config: shared-openid-connect
+      config:
+        scopes_required: # ${{ env "DECK_SERVICE_BACKEND_HOSTNAME" }} Not sure if this will work
+          - "alice-read"
+    - name: oas-validation
+      _config: shared-oas-validation
+      config:
+        api_spec: |
+           ${{ env "DECK_OAS_SPEC_JSON" }}

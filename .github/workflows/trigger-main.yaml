@@ -1,0 +1,130 @@
+name: Deploy to Development
+# Deploys to the development Konnect control plane on every push to main.
+# Jobs are chained: each only runs if the previous succeeded, ensuring
+# the backup always exists before any write to Konnect occurs.
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  actions: read
+  contents: read
+
+env:
+  ENVIRONMENT: development
+
+jobs:
+  setup-apps:
+    name: Setup Apps Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      all-apps-list: ${{ steps.set-apps.outputs.all-apps-list }}
+    steps:
+      - name: Set development apps list
+        id: set-apps
+        run: |
+          # Space-separated list of APIs to deploy on merge to main.
+          # Each name must correspond to a folder under apis/.
+          ALL_APPS="alice"
+          echo "all-apps-list=$ALL_APPS" >> $GITHUB_OUTPUT
+          echo "Development apps list: $ALL_APPS"
+
+  kong-pipeline:
+    name: Validate APIs
+    needs: setup-apps
+    # Gate: all downstream deploy jobs depend on this succeeding.
+    uses: ./.github/workflows/validate-apis.yaml
+    with:
+      apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
+
+  deck-lint:
+    name: Lint Deck Config
+    needs: setup-apps
+    # Blocking gate: lint the generated deck config before any write to Konnect.
+    uses: ./.github/workflows/lint-deck.yaml
+    with:
+      apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
+
+  kong-backup:
+    name: Backup Kong State
+    needs: [setup-apps, kong-pipeline, deck-lint]
+    if: ${{ needs.kong-pipeline.result == 'success' && needs.deck-lint.result == 'success' }}
+    # Always back up before writing to Konnect so the state can be restored on failure.
+    uses: ./.github/workflows/backup-kong-control-plane.yaml
+    with:
+      environment: development
+      control_plane_name: apiops-development
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+  kong-global:
+    name: Deploy Global Components
+    needs: [setup-apps, kong-pipeline, kong-backup]
+    if: ${{ needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success' }}
+    # Global components (consumers, consumer groups, plugins) must land before API configs
+    # because APIs reference them via select_tags and consumer group associations.
+    uses: ./.github/workflows/deploy-global-components.yaml
+    with:
+      environment: development
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+  kong-deploy:
+    name: Deploy to Kong
+    needs: [setup-apps, kong-pipeline, kong-backup, kong-global]
+    if: ${{ needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success' && needs.kong-global.result == 'success' }}
+    # Generates Kong config from OpenAPI specs and syncs each API to Konnect.
+    uses: ./.github/workflows/deploy-apis.yaml
+    with:
+      environment: development
+      apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+  kong-verify:
+    name: Verify Kong Deployment
+    needs: [setup-apps, kong-pipeline, kong-backup, kong-global, kong-deploy]
+    if: ${{ needs.kong-deploy.result == 'success' }}
+    # Pings the control plane to confirm it is reachable and responding after deployment.
+    uses: ./.github/workflows/verify-deployment.yaml
+    with:
+      environment: development
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+  documentation:
+    name: Generate API Documentation
+    needs: [setup-apps, kong-pipeline, kong-backup, kong-global, kong-deploy, kong-verify]
+    if: ${{ needs.kong-verify.result == 'success' }}
+    # Builds HTML docs from the OpenAPI spec and uploads them as pipeline artifacts.
+    uses: ./.github/workflows/generate-and-publish-documentation.yaml
+    with:
+      environment: development
+      apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
+
+  notify:
+    name: Notify Deployment
+    needs: [setup-apps, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, documentation]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Deployment notification
+        run: |
+          echo "Dev deployment completed"
+          echo "Commit SHA: ${{ github.sha }}"
+          echo "Ref: ${{ github.ref }}"
+          echo "Environment: ${{ env.ENVIRONMENT }}"
+          echo "Kong pipeline status: ${{ needs.kong-pipeline.result }}"
+          echo "Deck lint status: ${{ needs.deck-lint.result }}"
+          echo "Kong backup status: ${{ needs.kong-backup.result }}"
+          echo "Kong global status: ${{ needs.kong-global.result }}"
+          echo "Kong deploy status: ${{ needs.kong-deploy.result }}"
+          echo "Kong verify status: ${{ needs.kong-verify.result }}"
+          echo "Documentation status: ${{ needs.documentation.result }}"
+          if [ "${{ needs.kong-pipeline.result }}" = "success" ] && [ "${{ needs.deck-lint.result }}" = "success" ] && [ "${{ needs.kong-backup.result }}" = "success" ] && [ "${{ needs.kong-global.result }}" = "success" ] && [ "${{ needs.kong-deploy.result }}" = "success" ] && [ "${{ needs.kong-verify.result }}" = "success" ] && [ "${{ needs.documentation.result }}" = "success" ]; then
+            echo "✅ Deployment, verification, and documentation successful"
+          else
+            echo "❌ Deployment, verification, or documentation failed"
+          fi

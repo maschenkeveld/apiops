@@ -1,0 +1,58 @@
+# deck linting ruleset
+#
+# `deck file lint` is built on Spectral, so this is a Spectral ruleset evaluated against
+# a decK state file (the generated Kong config). Paths target deck/Kong entities
+# ($.services, $.routes, $.plugins, ...) rather than an OpenAPI document.
+#
+# Run:  deck file lint shared/deck-linting/ruleset.yaml <state-file> --fail-severity error
+#
+# Keep this small and high-signal; tighten over time. `error`-level rules block the
+# pipeline (see lint-deck.yaml --fail-severity error); use `warn` for advisory rules.
+rules:
+  service-must-have-name:
+    description: Every service must have a name.
+    severity: error
+    given: $.services[*]
+    then:
+      field: name
+      function: truthy
+
+  service-must-have-tags:
+    description: Every service must be tagged (so syncs can be scoped with --select-tag).
+    severity: error
+    given: $.services[*]
+    then:
+      field: tags
+      function: truthy
+
+  route-must-have-name:
+    description: Every route must have a name.
+    severity: error
+    given: $.services[*].routes[*]
+    then:
+      field: name
+      function: truthy
+
+  route-must-have-tags:
+    description: Every route must be tagged.
+    severity: error
+    given: $.services[*].routes[*]
+    then:
+      field: tags
+      function: truthy
+
+  route-should-strip-path:
+    description: Routes should explicitly set strip_path to avoid ambiguous proxy behaviour.
+    severity: warn
+    given: $.services[*].routes[*]
+    then:
+      field: strip_path
+      function: defined
+
+  plugin-must-have-name:
+    description: Every plugin entry must reference a plugin by name.
+    severity: error
+    given: $.plugins[*]
+    then:
+      field: name
+      function: truthy

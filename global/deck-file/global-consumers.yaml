@@ -1,0 +1,25 @@
+_format_version: "3.0"
+_info:
+  select_tags:
+    - global-consumers
+  default_lookup_tags:
+    consumer_groups:
+    - global-consumer-groups
+
+consumers:
+  - username: "consumer-bronze-1"
+    custom_id: "aaaaaaaa-0001-0001-0001-aaaaaaaaaaaa"
+    groups:
+    - name: bronze
+  - username: "consumer-gold-1"
+    custom_id: "bbbbbbbb-0001-0001-0001-bbbbbbbbbbbb"
+    groups:
+    - name: gold
+  - username: "consumer-silver-1"
+    custom_id: "cccccccc-0001-0001-0001-cccccccccccc"
+    groups:
+    - name: silver
+  - username: "consumer-silver-2"
+    custom_id: "cccccccc-0002-0002-0002-cccccccccccc"
+    groups:
+    - name: silver

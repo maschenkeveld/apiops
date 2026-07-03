@@ -1,0 +1,73 @@
+name: Verify Deployment
+# Reusable workflow: runs "deck gateway ping" to confirm the Konnect control plane
+# is reachable and accepting connections after a deployment.
+# Called as the final gate before documentation is published.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to verify (development, production)'
+        required: true
+        type: string
+    secrets:
+      KONNECT_TOKEN:
+        description: 'Kong Konnect API token'
+        required: true
+
+env:
+  KONNECT_ADDR: https://eu.api.konghq.com
+  KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+jobs:
+  verify-kong:
+    name: Verify Kong Deployment
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        # Needed to access the bundled deck binary from the repo.
+        uses: actions/checkout@v4
+
+      - name: Set control plane name
+        id: set-control-plane
+        run: |
+          # Maps the logical environment name to the Konnect control plane name.
+          if [[ "${{ inputs.environment }}" == "development" ]]; then
+            echo "control_plane_name=apiops-development" >> $GITHUB_OUTPUT
+          elif [[ "${{ inputs.environment }}" == "production" ]]; then
+            echo "control_plane_name=apiops-production" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Invalid environment: ${{ inputs.environment }}"
+            echo "Supported environments: development, production"
+            exit 1
+          fi
+
+      - name: Install deck
+        # Download the official deck release (linux/amd64).
+        run: |
+          DECK_VERSION=1.49.1
+          curl -sL "https://github.com/Kong/deck/releases/download/v${DECK_VERSION}/deck_${DECK_VERSION}_linux_amd64.tar.gz" -o deck.tar.gz
+          sudo tar -xzf deck.tar.gz -C /usr/local/bin deck
+          sudo chmod +x /usr/local/bin/deck
+
+      - name: Verify Kong deployment
+        # Shared script — same one the local runner uses (make verify).
+        run: ./scripts/verify.sh "${{ steps.set-control-plane.outputs.control_plane_name }}"
+
+      - name: Create verification summary
+        if: always()
+        run: |
+          echo "# 🔍 Kong Deployment Verification" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Control Plane:** ${{ steps.set-control-plane.outputs.control_plane_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Verification Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          if [[ "${{ job.status }}" == "success" ]]; then
+            echo "## ✅ Verification Successful" >> $GITHUB_STEP_SUMMARY
+            echo "Kong gateway is responding correctly and deployment is verified." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Verification Failed" >> $GITHUB_STEP_SUMMARY
+            echo "Kong gateway verification failed. Check deployment logs for details." >> $GITHUB_STEP_SUMMARY
+          fi

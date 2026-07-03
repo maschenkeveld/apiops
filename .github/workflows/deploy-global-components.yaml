@@ -1,0 +1,137 @@
+name: Kong Global Components Deploy
+# Reusable workflow: deploys shared Konnect entities (consumers, consumer groups, plugins, redis config).
+# These must be deployed before APIs because API configs reference consumer groups and plugin partials.
+# Only runs when files under global/ change — skipped entirely on API-only changes.
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to deploy to (development, production)'
+        required: true
+        type: string
+    secrets:
+      KONNECT_TOKEN:
+        description: 'Kong Konnect API token'
+        required: true
+
+env:
+  KONNECT_ADDR: https://eu.api.konghq.com
+  KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+  COMPONENTS_LIST: "global-consumer-groups global-consumers global-plugins global-redis"
+
+jobs:
+  has-changes:
+    name: Detect changes in relevant files
+    runs-on: ubuntu-latest
+    outputs:
+      are-changes: ${{ steps.changed-files.outputs.global }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: dorny/paths-filter@v2
+        id: changed-files
+        with:
+          filters: |
+            global:
+              - '.github/workflows/deploy-global-components.yaml'
+              - 'global/**'
+
+  generate-matrix:
+    name: Generate Component Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      control_plane_name: ${{ steps.set-control-plane.outputs.control_plane_name }}
+    steps:
+      - name: Set control plane name
+        id: set-control-plane
+        run: |
+          # Maps the logical environment name to the Konnect control plane name.
+          echo "Environment: ${{ inputs.environment }}"
+
+          if [[ "${{ inputs.environment }}" == "development" ]]; then
+            echo "control_plane_name=apiops-development" >> $GITHUB_OUTPUT
+          elif [[ "${{ inputs.environment }}" == "production" ]]; then
+            echo "control_plane_name=apiops-production" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Invalid environment: ${{ inputs.environment }}"
+            echo "Supported environments: development, production"
+            exit 1
+          fi
+
+  deploy-components:
+    name: Deploy Global Components
+    needs: [has-changes, generate-matrix]
+    runs-on: ubuntu-latest
+    if: needs.has-changes.outputs.are-changes == 'true'
+    strategy:
+      # Sequential execution is required: consumers depend on consumer groups,
+      # and plugins may depend on both. Parallel deployment would cause race conditions.
+      max-parallel: 1
+      matrix:
+        component: [global-consumer-groups, global-consumers, global-plugins, global-redis]
+    env:
+      CONTROL_PLANE_NAME: ${{ needs.generate-matrix.outputs.control_plane_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install deck
+        # Download the official deck release (linux/amd64).
+        run: |
+          DECK_VERSION=1.49.1
+          curl -sL "https://github.com/Kong/deck/releases/download/v${DECK_VERSION}/deck_${DECK_VERSION}_linux_amd64.tar.gz" -o deck.tar.gz
+          sudo tar -xzf deck.tar.gz -C /usr/local/bin deck
+          sudo chmod +x /usr/local/bin/deck
+
+      - name: Deploy global component (patch + diff + sync)
+        # Shared script — same one the local runner uses (make deploy-global). Sources
+        # global/env-vars/<cp>, patches, diffs, then syncs scoped with --select-tag <component>.
+        run: ./scripts/deploy-global.sh "${{ env.CONTROL_PLANE_NAME }}" "${{ matrix.component }}"
+
+  deployment-summary:
+    name: Deployment Summary
+    needs: [has-changes, generate-matrix, deploy-components]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Create Deployment Summary
+        run: |
+          echo "# 🌐 Kong Global Components Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Control Plane:** ${{ needs.generate-matrix.outputs.control_plane_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Changes Detected:** ${{ needs.has-changes.outputs.are-changes }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Component | Status | Environment |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----------|--------|-------------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Convert space-separated list to array and iterate
+          IFS=' ' read -ra COMPONENTS <<< "${{ env.COMPONENTS_LIST }}"
+          for component in "${COMPONENTS[@]}"; do
+            status="✅ Success"
+            if [[ "${{ needs.deploy-components.result }}" != "success" ]]; then
+              status="❌ Failed"
+            fi
+            echo "| $component | $status | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall status
+          if [[ "${{ needs.has-changes.outputs.are-changes }}" == "true" ]]; then
+            if [[ "${{ needs.deploy-components.result }}" == "success" ]]; then
+              echo "## ✅ Deployment completed successfully!" >> $GITHUB_STEP_SUMMARY
+              echo "All global components have been deployed to the ${{ inputs.environment }} environment." >> $GITHUB_STEP_SUMMARY
+            else
+              echo "## ❌ Deployment completed with failures" >> $GITHUB_STEP_SUMMARY
+              echo "Some global components failed to deploy. Check the individual job logs for details." >> $GITHUB_STEP_SUMMARY
+            fi
+          else
+            echo "## ℹ️ No changes detected" >> $GITHUB_STEP_SUMMARY
+            echo "No changes were detected in global components, so no deployment was necessary." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Components processed:** ${{ env.COMPONENTS_LIST }}" >> $GITHUB_STEP_SUMMARY

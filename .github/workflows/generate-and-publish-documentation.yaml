@@ -1,0 +1,111 @@
+name: Documentation Generation
+# Reusable workflow: builds a self-contained HTML documentation page for each API's OpenAPI spec
+# using Redocly and uploads it as a GitHub Actions artifact.
+# The deploy_docs flag is reserved for future automation that would publish docs to a portal or CDN.
+# Called on both PRs (dry-run, deploy_docs=false) and deployments (after successful sync).
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: "Environment for documentation generation"
+        required: true
+        type: string
+      apps_list:
+        description: 'Space-separated list of apps to generate documentation for'
+        required: true
+        type: string
+      deploy_docs:
+        description: "Deploy HTML documentation to support the API"
+        required: false
+        type: boolean
+        default: false
+
+jobs:
+  setup-environment:
+    name: Setup Documentation Environment
+    runs-on: ubuntu-latest
+    outputs:
+      apps_matrix: ${{ steps.generate-matrix.outputs.apps_matrix }}
+    steps:
+      - name: Generate apps matrix for documentation
+        id: generate-matrix
+        run: |
+          APPS_TO_DOCUMENT="${{ inputs.apps_list }}"
+          echo "📚 Apps to generate documentation for in ${{ inputs.environment }} environment: $APPS_TO_DOCUMENT"
+
+          # Convert the space-separated list to a JSON array for the matrix strategy below.
+          apps_array=$(echo "$APPS_TO_DOCUMENT" | tr ' ' '\n' | jq -R . | jq -s -c .)
+          matrix_json="{\"app\":$apps_array}"
+          echo "apps_matrix=$matrix_json" >> $GITHUB_OUTPUT
+          echo "Generated documentation matrix: $matrix_json"
+
+  generate-docs:
+    name: Generate HTML Documentation
+    needs: setup-environment
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.setup-environment.outputs.apps_matrix) }}
+    env:
+      APP_PATH: apis/${{ matrix.app }}
+      SPEC_FILE: apis/${{ matrix.app }}/openapi-spec/openapi-spec.yaml
+      BUNDLED_HTML: apis/${{ matrix.app }}/openapi-spec/openapi-spec-bundled.html
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Install redocly CLI
+      run: npm i -g @redocly/cli@latest
+
+    - name: Generate HTML with Redocly
+      # Shared script — same one the local runner uses (make docs).
+      run: ./scripts/docs.sh ${{ matrix.app }} ${{ env.BUNDLED_HTML }}
+
+    - name: Upload OpenAPI Spec HTML
+      # Artifact name includes the environment so dev and prod docs don't overwrite each other.
+      uses: actions/upload-artifact@v4
+      with:
+        name: openapi-spec-html-${{ matrix.app }}-${{ inputs.environment }}
+        path: ${{ env.BUNDLED_HTML }}
+
+  documentation-summary:
+    name: Documentation Summary
+    needs: [setup-environment, generate-docs]
+    runs-on: ubuntu-latest
+    if: always()
+
+    steps:
+      - name: Create Documentation Summary
+        run: |
+          echo "# 📚 Documentation Generation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Apps Documented:** ${{ inputs.apps_list }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "Documentation has been generated for the following APIs:" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| API | Environment | Status | HTML Documentation |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|-------------|--------|---------------------|" >> $GITHUB_STEP_SUMMARY
+
+          IFS=' ' read -ra APPS <<< "${{ inputs.apps_list }}"
+          for app in "${APPS[@]}"; do
+            status="✅ Success"
+            if [[ "${{ needs.generate-docs.result }}" != "success" ]]; then
+              status="❌ Failed"
+            fi
+
+            artifact_name="openapi-spec-html-${app}-${{ inputs.environment }}"
+            echo "| $app | ${{ inputs.environment }} | $status | [View HTML](https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}?check_suite_focus=true#artifacts) |" >> $GITHUB_STEP_SUMMARY
+          done
+
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📝 Notes:" >> $GITHUB_STEP_SUMMARY
+          echo "- HTML documentation artifacts are available for download from the Actions tab" >> $GITHUB_STEP_SUMMARY
+          echo "- Artifact names follow the pattern: \`openapi-spec-html-{app}-${{ inputs.environment }}\`" >> $GITHUB_STEP_SUMMARY
+          echo "- Each artifact contains the complete HTML documentation for the respective API" >> $GITHUB_STEP_SUMMARY
+
+          if [[ "${{ inputs.deploy_docs }}" == "true" ]]; then
+            echo "- 🚀 Documentation deployment was requested" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "- 📦 Documentation was generated but not deployed" >> $GITHUB_STEP_SUMMARY
+          fi

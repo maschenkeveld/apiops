@@ -1,0 +1,76 @@
+name: Validate APIs
+# Reusable workflow: validates OAS specs for every app in apps_list in parallel.
+# Called by the PR trigger (validation only) and the main/release triggers (pre-deploy gate).
+#
+# The per-app logic lives in scripts/validate.sh (the same script the local runner uses):
+#   1. Bundle + Spectral lint (httpbin exempt)
+#   2. If the bundled spec changed vs the base branch: enforce changelog/semver/breaking-change rules
+# The script derives the baseline from git, so this workflow just checks out full history and runs it.
+
+on:
+  workflow_call:
+    inputs:
+      apps_list:
+        description: 'Space-separated list of apps to validate'
+        required: false
+        type: string
+        default: 'httpbin company company-mocked domain domain-mocked domain-users domain-users-mocked portal portal-mocked portal-users portal-users-mocked'
+
+jobs:
+  setup-matrix:
+    name: Setup Validation Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      apps_matrix: ${{ steps.generate-matrix.outputs.apps_matrix }}
+    steps:
+      - name: Generate apps matrix for validation
+        id: generate-matrix
+        run: |
+          apps_array=$(echo "${{ inputs.apps_list }}" | tr ' ' '\n' | jq -R . | jq -s -c .)
+          echo "apps_matrix={\"app\":$apps_array}" >> $GITHUB_OUTPUT
+          echo "Generated validation matrix: {\"app\":$apps_array}"
+
+  process-app:
+    name: Process App
+    needs: setup-matrix
+    runs-on: ubuntu-latest
+    strategy:
+      # All apps validated in parallel; a failure in one does not cancel others.
+      fail-fast: false
+      matrix: ${{ fromJson(needs.setup-matrix.outputs.apps_matrix) }}
+    steps:
+      - name: Checkout repository
+        # Full history so scripts/validate.sh can compare against the base branch (origin/main).
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install tooling
+        run: |
+          npm i -g @redocly/cli@latest @stoplight/spectral-cli@latest
+          sudo wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+          curl -fsSL https://raw.githubusercontent.com/oasdiff/oasdiff/main/install.sh | sh || echo "oasdiff install skipped"
+
+      - name: Validate API
+        # Shared script — same one the local runner uses (make validate).
+        run: ./scripts/validate.sh ${{ matrix.app }}
+
+  pipeline-summary:
+    name: Pipeline Summary
+    needs: [setup-matrix, process-app]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Create Pipeline Summary
+        run: |
+          echo "# 🚀 Kong Validation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Apps Validated:** ${{ inputs.apps_list }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          if [[ "${{ needs.process-app.result }}" == "success" ]]; then
+            echo "## ✅ Validation passed for all apps" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Validation failed" >> $GITHUB_STEP_SUMMARY
+            echo "Check the individual job logs (Spectral, version/changelog, or breaking changes)." >> $GITHUB_STEP_SUMMARY
+          fi

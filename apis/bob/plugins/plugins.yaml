@@ -1,0 +1,12 @@
+---
+_format_version: '1.0'
+add-plugins:
+- selectors:
+  - "$..services[*]"
+  overwrite: false
+  plugins:
+    - name: openid-connect
+      _config: common_openid-connect
+      config:
+        scopes_required:
+          - bob_read

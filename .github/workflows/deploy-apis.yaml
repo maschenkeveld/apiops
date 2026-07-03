@@ -1,0 +1,144 @@
+name: Kong Deploy
+# Reusable workflow: for each API in apps_list, generates a full Kong deck config from the
+# OpenAPI spec and syncs it to Konnect. All apps are processed in parallel via a matrix.
+#
+# Config build pipeline per app (executed in a single job):
+#   openapi-spec.yaml
+#     → redocly bundle       (resolve $refs)
+#     → deck openapi2kong    (generate base Kong config)
+#     → deck file merge      (add custom entities from additions.yaml)
+#     → deck file add-plugins (attach plugins using templates from shared/plugin-templates/)
+#     → deck file patch (shared)  (set route hosts from DECK_DATAPLANE_HOSTNAME env var)
+#     → deck file patch (api)     (set service backend from DECK_SERVICE_BACKEND_* env vars)
+#     → deck file add-tags   (tag with api name and major version for scoped syncing)
+#     → deck file namespace  (prefix all route paths with /<api>/<version>)
+#     → deck gateway sync    (write to Konnect, scoped by --select-tag)
+
+on:
+  workflow_call:
+    inputs:
+      environment:
+        description: 'Environment to deploy to (development, production)'
+        required: true
+        type: string
+      apps_list:
+        description: 'Space-separated list of apps to deploy'
+        required: true
+        type: string
+    secrets:
+      KONNECT_TOKEN:
+        description: 'Kong Konnect API token'
+        required: true
+
+env:
+  KONNECT_ADDR: https://eu.api.konghq.com
+  KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
+jobs:
+  setup-environment:
+    name: Setup Environment Configuration
+    runs-on: ubuntu-latest
+    outputs:
+      control_plane_name: ${{ steps.set-control-plane.outputs.control_plane_name }}
+      apps_matrix: ${{ steps.generate-matrix.outputs.apps_matrix }}
+    steps:
+      - name: Set control plane name
+        id: set-control-plane
+        run: |
+          # Maps the logical environment name to the Konnect control plane name.
+          if [[ "${{ inputs.environment }}" == "development" ]]; then
+            echo "control_plane_name=apiops-development" >> $GITHUB_OUTPUT
+          elif [[ "${{ inputs.environment }}" == "production" ]]; then
+            echo "control_plane_name=apiops-production" >> $GITHUB_OUTPUT
+          else
+            echo "❌ Invalid environment: ${{ inputs.environment }}"
+            echo "Supported environments: development, production"
+            exit 1
+          fi
+
+      - name: Generate apps matrix based on environment
+        id: generate-matrix
+        run: |
+          APPS_TO_DEPLOY="${{ inputs.apps_list }}"
+          echo "📋 Apps to deploy for ${{ inputs.environment }} environment: $APPS_TO_DEPLOY"
+
+          # Convert the space-separated list to a JSON array for the matrix strategy below.
+          apps_array=$(echo "$APPS_TO_DEPLOY" | tr ' ' '\n' | jq -R . | jq -s -c .)
+          matrix_json="{\"app\":$apps_array}"
+          echo "apps_matrix=$matrix_json" >> $GITHUB_OUTPUT
+          echo "Generated matrix: $matrix_json"
+
+  deploy-app:
+    name: Deploy App to Kong
+    needs: setup-environment
+    runs-on: ubuntu-latest
+    strategy:
+      # All apps are deployed in parallel. Each is scoped with --select-tag so they don't interfere.
+      matrix: ${{ fromJson(needs.setup-environment.outputs.apps_matrix) }}
+    env:
+      CONTROL_PLANE_NAME: ${{ needs.setup-environment.outputs.control_plane_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Kong Config
+        # Shared composite action: bundle → openapi2kong → merge/add-plugins/patch/add-tags/namespace.
+        # Same build used by lint-deck.yaml so the linted and deployed config are identical.
+        uses: ./.github/actions/build-kong-config
+        with:
+          app: ${{ matrix.app }}
+
+      - name: Upload Kong Plugined and Patched Config
+        # Upload as an artifact for debugging and audit purposes.
+        uses: actions/upload-artifact@v4
+        with:
+          name: kong-plugined-and-patched-${{ matrix.app }}.yaml
+          path: apis/${{ matrix.app }}/deck-file/generated/kong-plugined-and-patched.yaml
+
+      - name: Deploy to Kong (diff + sync)
+        # Shared script — same one the local runner uses (make deploy). Sources env-vars,
+        # scopes with --select-tag, runs deck gateway diff then sync.
+        run: ./scripts/deploy.sh ${{ matrix.app }} ${{ env.CONTROL_PLANE_NAME }}
+
+  deployment-summary:
+    name: Deployment Summary
+    needs: [setup-environment, deploy-app]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Create Deployment Summary
+        run: |
+          echo "# 🚀 Kong Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Control Plane:** ${{ needs.setup-environment.outputs.control_plane_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Apps Deployed:** ${{ inputs.apps_list }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Deployment Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| App | Status | Version | Environment |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|---------|-------------|" >> $GITHUB_STEP_SUMMARY
+          
+          # Convert space-separated list to array and iterate
+          IFS=' ' read -ra APPS <<< "${{ inputs.apps_list }}"
+          for app in "${APPS[@]}"; do
+            status="✅ Success"
+            if [[ "${{ needs.deploy-app.result }}" != "success" ]]; then
+              status="❌ Failed"
+            fi
+            echo "| $app | $status | Latest | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
+          done
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          
+          # Overall status
+          if [[ "${{ needs.deploy-app.result }}" == "success" ]]; then
+            echo "## ✅ Deployment completed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "All APIs have been deployed to the ${{ inputs.environment }} environment." >> $GITHUB_STEP_SUMMARY
+          else
+            echo "## ❌ Deployment completed with failures" >> $GITHUB_STEP_SUMMARY
+            echo "Some APIs failed to deploy. Check the individual job logs for details." >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Control Plane:** ${{ needs.setup-environment.outputs.control_plane_name }}" >> $GITHUB_STEP_SUMMARY
+          echo "**Apps Processed:** ${{ inputs.apps_list }}" >> $GITHUB_STEP_SUMMARY

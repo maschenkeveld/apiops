@@ -1,0 +1,66 @@
+name: Lint Deck Config
+# Reusable workflow: builds each API's Kong deck file (the same way deploy-apis.yaml does) and
+# lints it against shared/deck-linting/ruleset.yaml. Also lints the hand-written global deck files.
+# error-level findings fail the build (blocking gate); warn-level findings are reported only.
+#
+# This is the deck-level counterpart to the Spectral OpenAPI linting in validate-apis.yaml.
+
+on:
+  workflow_call:
+    inputs:
+      apps_list:
+        description: 'Space-separated list of apps to lint'
+        required: true
+        type: string
+
+jobs:
+  setup:
+    name: Setup Lint Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      apps_matrix: ${{ steps.generate-matrix.outputs.apps_matrix }}
+    steps:
+      - name: Generate apps matrix
+        id: generate-matrix
+        run: |
+          apps_array=$(echo "${{ inputs.apps_list }}" | tr ' ' '\n' | jq -R . | jq -s -c .)
+          echo "apps_matrix={\"app\":$apps_array}" >> $GITHUB_OUTPUT
+
+  lint-apis:
+    name: Lint API Deck Config
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.apps_matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Build Kong Config
+        id: build
+        uses: ./.github/actions/build-kong-config
+        with:
+          app: ${{ matrix.app }}
+
+      - name: Lint deck config
+        # Shared script: same lint the local runner uses. error-level findings block.
+        run: ./scripts/lint.sh ${{ matrix.app }}
+
+  lint-global:
+    name: Lint Global Deck Config
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install deck
+        # Download the official deck release (linux/amd64).
+        run: |
+          DECK_VERSION=1.49.1
+          curl -sL "https://github.com/Kong/deck/releases/download/v${DECK_VERSION}/deck_${DECK_VERSION}_linux_amd64.tar.gz" -o deck.tar.gz
+          sudo tar -xzf deck.tar.gz -C /usr/local/bin deck
+          sudo chmod +x /usr/local/bin/deck
+
+      - name: Lint global deck files
+        # Shared script — same one the local runner uses (make lint-global).
+        run: ./scripts/lint-global.sh

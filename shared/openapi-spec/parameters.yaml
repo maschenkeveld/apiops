@@ -1,0 +1,85 @@
+AuthorizationHeader:
+  name: Authorization
+  in: header
+  required: true
+  description: Bearer token for authentication
+  schema:
+    type: string
+
+ContentTypeHeader:
+  name: Content-Type
+  in: header
+  required: true
+  description: Content type, must be application/json
+  schema:
+    type: string
+    enum: [application/json]
+
+PortalIdPath:
+  name: portal-id
+  in: path
+  required: true
+  description: The portal id
+  example: "3afb7b54-6144-4561-9a29-1148006f2375"
+  schema:
+    type: string
+
+UserIdPath:
+  name: user-id
+  in: path
+  required: true
+  description: The user id
+  example: "3afb7b54-6144-4561-9a29-1148006f2375"
+  schema:
+    type: string
+
+GetUserIdPath:
+  name: user-identifier
+  in: path
+  required: true
+  description: The user id
+  example: "3afb7b54-6144-4561-9a29-1148006f2375"
+  schema:
+    type: string
+
+DomainNamePath:
+  name: domain-name
+  in: path
+  required: true
+  description: The domain name
+  schema:
+    type: string
+
+DomainNameQuery:
+  name: domain-name
+  in: query
+  required: true
+  description: The domain name
+  schema:
+    type: string
+
+DomainIdPath:
+  name: domain-id
+  in: path
+  required: true
+  description: The domain name
+  example: "3afb7b54-6144-4561-9a29-1148006f2375"
+  schema:
+    type: string
+
+EmailQuery:
+  name: email
+  in: query
+  required: true
+  description: Email address to search for
+  schema:
+    type: string
+    format: email
+
+CustomerCodeQuery:
+  name: customerCode
+  in: query
+  required: true
+  description: The internal customer code to search for
+  schema:
+    type: string

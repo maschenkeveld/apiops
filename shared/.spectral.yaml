@@ -1,0 +1,53 @@
+extends: ["spectral:oas"]
+rules:
+  operation-description:
+    description: All API operations must have a description of at least 50 characters.
+    given: $.paths[*][get,post,put,delete,patch,options,head]
+    severity: error
+    then:
+      - field: description
+        function: defined
+      - field: description
+        function: pattern
+        functionOptions:
+          match: ".{50,}"
+
+  operation-summary:
+    description: All API operations must have a non-empty summary.
+    given: $.paths[*][get,post,put,delete,patch,options,head]
+    severity: error
+    then:
+      - field: summary
+        function: defined
+      - field: summary
+        function: pattern
+        functionOptions:
+          match: ".+"
+
+  operation-id-camelcase:
+    description: operationId must be in camelCase format
+    given: $.paths[*][get,post,put,delete,patch,options,head].operationId
+    severity: error
+    then:
+      - function: pattern
+        functionOptions:
+          match: "^[a-z][a-zA-Z0-9]*$"
+
+  body-properties-case:
+    description: Body properties MUST be camelCase
+    severity: error
+    given: $..properties.*~
+    then:
+      function: pattern
+      functionOptions:
+        match: '^[a-z]+[a-zA-Z0-9]*$'
+
+  kebab-case-path-parameters:
+    description: "Path parameters should be kebab-case"
+    severity: error
+    given: "$..parameters[?(@.in == 'path')]"
+    then:
+      field: name
+      function: pattern
+      functionOptions:
+        match: "^[a-z]+(-[a-z]+)*$"
