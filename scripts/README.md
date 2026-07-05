@@ -66,7 +66,8 @@ Every pipeline step is a script here; the matching workflow is a thin wrapper th
 | `deploy-global.sh` | `deploy-global-components.yaml` |
 | `deploy.sh` | `deploy-apis.yaml` |
 | `verify.sh` | `verify-deployment.yaml` |
-| `portal-id.sh` + `publish.sh` | `publish-to-portal.yaml` (publish.sh wraps `scripts/publish-api.sh`) |
+| `publish.sh` | `publish-to-portal.yaml` (wraps `scripts/publish-api.sh`; takes PORTAL_ID as env/input) |
+| `portal-id.sh` | `publish-to-portal.yaml`, only when `read_from_openbao=true` (reads portal_id from OpenBao) |
 | `control-plane.sh` | env→control-plane mapping used by several workflows |
 | `demo.sh` | the `trigger-*` orchestration |
 

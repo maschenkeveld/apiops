@@ -1,2 +1,0 @@
-export DECK_SERVICE_BACKEND_HOSTNAME=eddy.extsvc.mesh.local
-export DECK_SERVICE_BACKEND_PORT=8080
