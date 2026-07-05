@@ -28,8 +28,10 @@ jobs:
 
       - name: Install kongctl
         run: |
-          ASSET_URL=$(curl -sf https://api.github.com/repos/Kong/kongctl/releases/latest \
+          ASSET_URL=$(curl -sf -H "Authorization: Bearer ${{ github.token }}" \
+            https://api.github.com/repos/Kong/kongctl/releases/latest \
             | jq -r '.assets[] | select(.name | test("linux_amd64\\.tar\\.gz$")) | .browser_download_url')
+          [ -n "$ASSET_URL" ] || { echo "Failed to resolve kongctl release URL"; exit 1; }
           curl -L "$ASSET_URL" | tar xz
           sudo mv kongctl /usr/local/bin/
           kongctl version
