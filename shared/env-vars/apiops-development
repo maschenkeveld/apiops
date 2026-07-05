@@ -1,1 +1,1 @@
-export DECK_DATAPLANE_HOSTNAME="kong-proxy.development.example.com"
+export DECK_DATAPLANE_HOSTNAME="kong-proxy-dp-konnect-eu-apiops-development.schenkeveld.io"

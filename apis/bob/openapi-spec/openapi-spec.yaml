@@ -88,6 +88,9 @@ paths:
   /metrics:
     get:
       summary: Get metrics
+      operationId: getMetrics
+      tags: [Observability]
+      description: Returns Prometheus-compatible metrics for the bob service including request counts, latencies, and error rates.
       # security:
       #   - ApiKeyAuth: []
       #   - BearerAuth: []
@@ -98,6 +101,9 @@ paths:
   /health:
     get:
       summary: Health Endpoint
+      operationId: getHealth
+      tags: [Observability]
+      description: Returns the current health status of the bob service. Use this endpoint for liveness and readiness probes.
       # security:
       #   - ApiKeyAuth: []
       #   - BearerAuth: []
@@ -112,6 +118,9 @@ paths:
   /identify:
     get:
       summary: Identify Endpoint
+      operationId: getIdentify
+      tags: [Bob]
+      description: Returns identity information for the current request, including the service name, zone, and incoming request headers.
       # security:
       #   - ApiKeyAuth: []
       #   - BearerAuth: []
@@ -126,6 +135,9 @@ paths:
   /crawl:
     post:
       summary: Crawl Endpoint
+      operationId: postCrawl
+      tags: [Bob]
+      description: Recursively crawls a list of upstream services and returns the aggregated responses, useful for testing mesh connectivity.
       # security:
       #   - ApiKeyAuth: []
       #   - BearerAuth: []
