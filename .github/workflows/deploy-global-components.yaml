@@ -110,10 +110,11 @@ jobs:
           # Convert space-separated list to array and iterate
           IFS=' ' read -ra COMPONENTS <<< "${{ env.COMPONENTS_LIST }}"
           for component in "${COMPONENTS[@]}"; do
-            status="✅ Success"
-            if [[ "${{ needs.deploy-components.result }}" != "success" ]]; then
-              status="❌ Failed"
-            fi
+            case "${{ needs.deploy-components.result }}" in
+              success)  status="✅ Deployed" ;;
+              skipped)  status="⏭️ Skipped (no changes)" ;;
+              *)        status="❌ Failed" ;;
+            esac
             echo "| $component | $status | ${{ inputs.environment }} |" >> $GITHUB_STEP_SUMMARY
           done
           
