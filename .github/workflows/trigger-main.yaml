@@ -46,70 +46,47 @@ jobs:
     with:
       apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
 
-  resolve-secrets:
-    name: Resolve Secrets
-    needs: setup-apps
-    runs-on: ubuntu-latest
-    outputs:
-      konnect_token: ${{ steps.token.outputs.konnect_token }}
-    steps:
-      - uses: actions/checkout@v4
-      - name: Resolve Konnect token
-        id: token
-        env:
-          VAULT_ADDR: https://openbao.shared.pve-home.schenkeveld.io
-          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
-          KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
-        run: |
-          if [ "${{ vars.READ_FROM_OPENBAO }}" = "true" ]; then
-            TOKEN="$(./scripts/kpat.sh)"
-          else
-            TOKEN="$KONNECT_TOKEN"
-          fi
-          echo "konnect_token=$TOKEN" >> $GITHUB_OUTPUT
-          echo "::add-mask::$TOKEN"
-
   kong-backup:
     name: Backup Kong State
-    needs: [setup-apps, kong-pipeline, deck-lint, resolve-secrets]
+    needs: [setup-apps, kong-pipeline, deck-lint]
     if: ${{ needs.kong-pipeline.result == 'success' && needs.deck-lint.result == 'success' }}
     uses: ./.github/workflows/backup-kong-control-plane.yaml
     with:
       environment: development
       control_plane_name: apiops-development
     secrets:
-      KONNECT_TOKEN: ${{ needs.resolve-secrets.outputs.konnect_token }}
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   kong-global:
     name: Deploy Global Components
-    needs: [setup-apps, kong-pipeline, kong-backup, resolve-secrets]
+    needs: [setup-apps, kong-pipeline, kong-backup]
     if: ${{ needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success' }}
     uses: ./.github/workflows/deploy-global-components.yaml
     with:
       environment: development
     secrets:
-      KONNECT_TOKEN: ${{ needs.resolve-secrets.outputs.konnect_token }}
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   kong-deploy:
     name: Deploy to Kong
-    needs: [setup-apps, kong-pipeline, kong-backup, kong-global, resolve-secrets]
+    needs: [setup-apps, kong-pipeline, kong-backup, kong-global]
     if: ${{ needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success' && needs.kong-global.result == 'success' }}
     uses: ./.github/workflows/deploy-apis.yaml
     with:
       environment: development
       apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
     secrets:
-      KONNECT_TOKEN: ${{ needs.resolve-secrets.outputs.konnect_token }}
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   kong-verify:
     name: Verify Kong Deployment
-    needs: [setup-apps, kong-pipeline, kong-backup, kong-global, kong-deploy, resolve-secrets]
+    needs: [setup-apps, kong-pipeline, kong-backup, kong-global, kong-deploy]
     if: ${{ needs.kong-deploy.result == 'success' }}
     uses: ./.github/workflows/verify-deployment.yaml
     with:
       environment: development
     secrets:
-      KONNECT_TOKEN: ${{ needs.resolve-secrets.outputs.konnect_token }}
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   documentation:
     name: Generate API Documentation
@@ -123,7 +100,7 @@ jobs:
 
   notify:
     name: Notify Deployment
-    needs: [setup-apps, kong-pipeline, deck-lint, resolve-secrets, kong-backup, kong-global, kong-deploy, kong-verify, documentation]
+    needs: [setup-apps, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, documentation]
     runs-on: ubuntu-latest
     if: always()
 
