@@ -110,7 +110,8 @@ for APP in $APPS_LIST; do
   - ref: "${CATALOG_NAME}"
     name: "${CATALOG_NAME}"
     versions:
-      - version: "1.0.0"
+      - ref: "${CATALOG_NAME}-v1"
+        version: "1.0.0"
         spec:
           content: !file ${SPEC}
     publications:
