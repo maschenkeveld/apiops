@@ -77,6 +77,13 @@ for APP in $APPS_LIST; do
   YAML_OUT="${APP}-catalog.yaml"
   TMPFILES+=("$YAML_OUT")
 
+  # Convert spec YAML → compact JSON → escape single-quotes for YAML single-quoted string.
+  # (Matches the format kongctl dump produces; !file re-parses JSON as an object, not a string.)
+  SPEC_JSON=$(python3 -c \
+    "import yaml,json,sys; d=yaml.safe_load(open(sys.argv[1])); print(json.dumps(d,separators=(',',':')))" \
+    "$SPEC" 2>/dev/null || yq -o=json -I 0 . "$SPEC")
+  SPEC_YAML_SAFE="${SPEC_JSON//\'/\'\'}"
+
   log "Generating $YAML_OUT"
 
   printf '_defaults:\n  kongctl:\n    namespace: %s\n\napis:\n' "$APP" > "$YAML_OUT"
@@ -126,7 +133,7 @@ for APP in $APPS_LIST; do
       - ref: "${CATALOG_NAME}-v1"
         version: "1.0.0"
         spec:
-          content: !file ${SPEC}
+          content: '${SPEC_YAML_SAFE}'
     publications:
       - ref: "${CATALOG_NAME}-pub"
         portal_id: "${PORTAL_ID}"
