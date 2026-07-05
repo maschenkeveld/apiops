@@ -24,7 +24,6 @@ deck_args=(
   --konnect-token "$KONNECT_TOKEN"
   --select-tag "$DECK_API_NAME"
   --select-tag "$DECK_API_VERSION"
-  --preserve-consumer-group-associations
 )
 
 log "deck gateway diff: $APP → $CP"
