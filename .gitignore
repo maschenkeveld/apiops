@@ -1,4 +1,5 @@
 # Generated pipeline artifacts — recreated by CI on every run, never commit these
+*-catalog.yaml
 **/deck-file/generated/*.yaml
 **/openapi-spec/openapi-spec-bundled*.yaml
 **/openapi-spec/openapi-spec-bundled*.html

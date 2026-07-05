@@ -26,12 +26,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Install kongctl
+        run: |
+          ASSET_URL=$(curl -sf https://api.github.com/repos/Kong/kongctl/releases/latest \
+            | jq -r '.assets[] | select(.name | test("linux_amd64\\.tar\\.gz$")) | .browser_download_url')
+          curl -L "$ASSET_URL" | tar xz
+          sudo mv kongctl /usr/local/bin/
+          kongctl version
+
       - name: Publish API Catalog and Portals
         env:
           KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
           KONNECT_REGION: ${{ inputs.konnect_region }}
           APPS_LIST: ${{ inputs.apps_list }}
-        run: ./scripts/publish-catalog.sh
+        run: ./scripts/publish-api.sh
 
       - name: Summary
         if: always()
