@@ -183,7 +183,7 @@ _plugin_configs:
     introspection_post_args_names: null
     introspection_post_args_values: null
     introspection_token_param_name: token
-    issuer: 
+    issuer: https://keycloak.schenkeveld.io/realms/kong/.well-known/openid-configuration
     issuers_allowed: null
     jwt_session_claim: sid
     jwt_session_cookie: null
