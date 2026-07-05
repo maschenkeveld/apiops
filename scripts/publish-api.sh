@@ -25,7 +25,18 @@ export KONGCTL_DEFAULT_KONNECT_PAT="$KONNECT_TOKEN"
 BASE_URL="https://${KONNECT_REGION}.api.konghq.com"
 AUTH=(-H "Authorization: Bearer $KONNECT_TOKEN" -H "Content-Type: application/json")
 
-konnect_get() { curl -sf "$BASE_URL$1" "${AUTH[@]}"; }
+konnect_get()    { curl -sf "$BASE_URL$1" "${AUTH[@]}"; }
+konnect_delete() { curl -sf -X DELETE "$BASE_URL$1" "${AUTH[@]}" || true; }
+
+# Remove an API catalog entry by name so kongctl can (re)create it under its namespace.
+delete_api_if_exists() {
+  local name="$1"
+  local encoded; encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$name'))")
+  local id; id=$(konnect_get "/v3/apis?filter%5Bname%5D=${encoded}" | jq -r '.data[0].id // empty')
+  [ -n "$id" ] || return 0
+  konnect_delete "/v3/apis/$id"
+  log "  cleared existing entry: $name"
+}
 
 portal_id_for() {
   local name="$1"
@@ -103,6 +114,8 @@ for APP in $APPS_LIST; do
     CP_ID=$(cp_id_for "$cp_name")
     SVC_ID=""
     [ -n "$CP_ID" ] && SVC_ID=$(service_id_for "$CP_ID" "$svc_name")
+
+    delete_api_if_exists "$CATALOG_NAME"
 
     log "  $CATALOG_NAME → portal=$PORTAL_ID svc=${SVC_ID:-not linked}"
 
