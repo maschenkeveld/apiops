@@ -77,47 +77,73 @@ jobs:
     with:
       apps_list: ${{ needs.check-release-branch.outputs.production-apps-list }}
 
+  resolve-secrets:
+    name: Resolve Secrets
+    needs: check-release-branch
+    if: needs.check-release-branch.outputs.is-release == 'true'
+    runs-on: ubuntu-latest
+    outputs:
+      konnect_token: ${{ steps.token.outputs.konnect_token }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Resolve Konnect token
+        id: token
+        # READ_FROM_OPENBAO=true  → fetch KPAT from OpenBao via scripts/kpat.sh
+        # READ_FROM_OPENBAO=false → use the KONNECT_TOKEN secret directly
+        env:
+          VAULT_ADDR: https://openbao.shared.pve-home.schenkeveld.io
+          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
+          KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+        run: |
+          if [ "${{ vars.READ_FROM_OPENBAO }}" = "true" ]; then
+            TOKEN="$(./scripts/kpat.sh)"
+          else
+            TOKEN="$KONNECT_TOKEN"
+          fi
+          echo "::add-mask::$TOKEN"
+          echo "konnect_token=$TOKEN" >> $GITHUB_OUTPUT
+
   kong-backup:
     name: Backup Kong State
-    needs: [check-release-branch, kong-pipeline, deck-lint]
+    needs: [check-release-branch, kong-pipeline, deck-lint, resolve-secrets]
     if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-pipeline.result == 'success' && needs.deck-lint.result == 'success'
     uses: ./.github/workflows/backup-kong-control-plane.yaml
     with:
       environment: "production"
       control_plane_name: "apiops-production"
     secrets:
-      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+      KONNECT_TOKEN: ${{ needs.resolve-secrets.outputs.konnect_token }}
 
   kong-global:
     name: Deploy Global Components to Production
-    needs: [check-release-branch, kong-pipeline, kong-backup]
+    needs: [check-release-branch, kong-pipeline, kong-backup, resolve-secrets]
     if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success'
     uses: ./.github/workflows/deploy-global-components.yaml
     with:
       environment: production
     secrets:
-      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+      KONNECT_TOKEN: ${{ needs.resolve-secrets.outputs.konnect_token }}
 
   kong-deploy:
     name: Deploy to Kong Production
-    needs: [check-release-branch, kong-pipeline, kong-backup, kong-global]
+    needs: [check-release-branch, kong-pipeline, kong-backup, kong-global, resolve-secrets]
     if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success' && needs.kong-global.result == 'success'
     uses: ./.github/workflows/deploy-apis.yaml
     with:
       environment: production
       apps_list: ${{ needs.check-release-branch.outputs.production-apps-list }}
     secrets:
-      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+      KONNECT_TOKEN: ${{ needs.resolve-secrets.outputs.konnect_token }}
 
   kong-verify:
     name: Verify Kong Production Deployment
-    needs: [check-release-branch, kong-pipeline, kong-backup, kong-global, kong-deploy]
+    needs: [check-release-branch, kong-pipeline, kong-backup, kong-global, kong-deploy, resolve-secrets]
     if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-deploy.result == 'success'
     uses: ./.github/workflows/verify-deployment.yaml
     with:
       environment: production
     secrets:
-      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+      KONNECT_TOKEN: ${{ needs.resolve-secrets.outputs.konnect_token }}
 
   documentation:
     name: Generate Release Documentation
@@ -130,7 +156,7 @@ jobs:
 
   kong-portal:
     name: Publish to Dev Portal
-    needs: [check-release-branch, kong-pipeline, kong-backup, kong-global, kong-deploy, kong-verify]
+    needs: [check-release-branch, kong-pipeline, kong-backup, kong-global, kong-deploy, kong-verify, resolve-secrets]
     # Publish to the portal only after the gateway deploy is verified, so the implementation
     # link always points at a live service. Portal publishing is production-only.
     if: needs.check-release-branch.outputs.is-release == 'true' && needs.kong-verify.result == 'success'
@@ -138,13 +164,17 @@ jobs:
     with:
       environment: production
       apps_list: ${{ needs.check-release-branch.outputs.production-apps-list }}
+      # READ_FROM_OPENBAO=true  → fetch portal_id from OpenBao (needs VAULT_TOKEN + reachable runner)
+      # READ_FROM_OPENBAO=false → use the KONNECT_PORTAL_ID variable
+      portal_id: ${{ vars.KONNECT_PORTAL_ID }}
+      read_from_openbao: ${{ vars.READ_FROM_OPENBAO == 'true' }}
     secrets:
-      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+      KONNECT_TOKEN: ${{ needs.resolve-secrets.outputs.konnect_token }}
       VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
 
   release-summary:
     name: Release Summary
-    needs: [check-release-branch, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, documentation, kong-portal]
+    needs: [check-release-branch, kong-pipeline, deck-lint, resolve-secrets, kong-backup, kong-global, kong-deploy, kong-verify, documentation, kong-portal]
     if: needs.check-release-branch.outputs.is-release == 'true'
     runs-on: ubuntu-latest
     
