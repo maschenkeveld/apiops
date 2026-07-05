@@ -32,10 +32,11 @@ jobs:
             https://api.github.com/repos/Kong/kongctl/releases/latest)
           echo "Available assets:"; echo "$RELEASE" | jq -r '.assets[].name'
           ASSET_URL=$(echo "$RELEASE" | jq -r '
-            .assets[] | select(.name | ascii_downcase | test("linux.*(amd64|x86_64)\\.tar\\.gz"))
-            | .browser_download_url' | head -1)
+            .assets[] | select(.name == "kongctl_linux_amd64.zip")
+            | .browser_download_url')
           [ -n "$ASSET_URL" ] || { echo "Failed to resolve kongctl release URL"; exit 1; }
-          curl -L "$ASSET_URL" | tar xz
+          curl -L "$ASSET_URL" -o kongctl.zip
+          unzip -q kongctl.zip kongctl
           sudo mv kongctl /usr/local/bin/
           kongctl version
 
