@@ -115,7 +115,8 @@ for APP in $APPS_LIST; do
         spec:
           content: !file ${SPEC}
     publications:
-      - portal_id: "${PORTAL_ID}"
+      - ref: "${CATALOG_NAME}-pub"
+        portal_id: "${PORTAL_ID}"
         visibility: public
         auto_approve_registrations: false
 ENTRY
@@ -123,7 +124,8 @@ ENTRY
     if [ -n "$SVC_ID" ]; then
       cat >> "$YAML_OUT" <<IMPL
     implementations:
-      - service:
+      - ref: "${CATALOG_NAME}-impl"
+        service:
           control_plane_id: "${CP_ID}"
           id: "${SVC_ID}"
 IMPL
@@ -137,7 +139,8 @@ IMPL
         title=$(md_title "$f" "$slug")
         title="${title//\"/\\\"}"
         cat >> "$YAML_OUT" <<DOC
-      - slug: "${slug}"
+      - ref: "${CATALOG_NAME}-doc-${slug}"
+        slug: "${slug}"
         title: "${title}"
         content: !file ${f}
         status: published
