@@ -1,0 +1,43 @@
+name: Publish to API Catalog
+# Reusable workflow: for each app in apps_list, reads apis/$APP/konnect.yaml and
+# publishes to the Konnect API Catalog + developer portals if catalog: true.
+# All IDs are resolved by name at runtime.
+
+on:
+  workflow_call:
+    inputs:
+      apps_list:
+        description: 'Space-separated list of apps to publish'
+        required: true
+        type: string
+      konnect_region:
+        description: 'Konnect region'
+        required: false
+        type: string
+        default: 'eu'
+    secrets:
+      KONNECT_TOKEN:
+        required: true
+
+jobs:
+  publish-catalog:
+    name: Publish to Konnect API Catalog
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Publish API Catalog and Portals
+        env:
+          KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+          KONNECT_REGION: ${{ inputs.konnect_region }}
+          APPS_LIST: ${{ inputs.apps_list }}
+        run: ./scripts/publish-catalog.sh
+
+      - name: Summary
+        if: always()
+        run: |
+          STATUS="${{ job.status == 'success' && '✅ Published' || '❌ Failed' }}"
+          echo "# 📖 API Catalog" >> $GITHUB_STEP_SUMMARY
+          echo "| Apps | Region | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ${{ inputs.apps_list }} | ${{ inputs.konnect_region }} | $STATUS |" >> $GITHUB_STEP_SUMMARY

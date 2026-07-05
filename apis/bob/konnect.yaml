@@ -1,0 +1,4 @@
+catalog: true
+portals:
+  - apiops-developer-portal
+  - apiops-production-portal

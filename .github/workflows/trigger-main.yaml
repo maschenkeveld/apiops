@@ -98,9 +98,20 @@ jobs:
       environment: development
       apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
 
+  publish-catalog:
+    name: Publish to API Catalog
+    needs: [setup-apps, kong-verify]
+    if: ${{ needs.kong-verify.result == 'success' }}
+    uses: ./.github/workflows/publish-to-catalog.yaml
+    with:
+      apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
+      konnect_region: eu
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
   notify:
     name: Notify Deployment
-    needs: [setup-apps, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, documentation]
+    needs: [setup-apps, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, documentation, publish-catalog]
     runs-on: ubuntu-latest
     if: always()
 
@@ -118,8 +129,8 @@ jobs:
           echo "Kong deploy status: ${{ needs.kong-deploy.result }}"
           echo "Kong verify status: ${{ needs.kong-verify.result }}"
           echo "Documentation status: ${{ needs.documentation.result }}"
-          if [ "${{ needs.kong-pipeline.result }}" = "success" ] && [ "${{ needs.deck-lint.result }}" = "success" ] && [ "${{ needs.kong-backup.result }}" = "success" ] && [ "${{ needs.kong-global.result }}" = "success" ] && [ "${{ needs.kong-deploy.result }}" = "success" ] && [ "${{ needs.kong-verify.result }}" = "success" ] && [ "${{ needs.documentation.result }}" = "success" ]; then
-            echo "✅ Deployment, verification, and documentation successful"
+          if [ "${{ needs.kong-pipeline.result }}" = "success" ] && [ "${{ needs.deck-lint.result }}" = "success" ] && [ "${{ needs.kong-backup.result }}" = "success" ] && [ "${{ needs.kong-global.result }}" = "success" ] && [ "${{ needs.kong-deploy.result }}" = "success" ] && [ "${{ needs.kong-verify.result }}" = "success" ] && [ "${{ needs.documentation.result }}" = "success" ] && [ "${{ needs.publish-catalog.result }}" = "success" ]; then
+            echo "✅ Deployment, verification, documentation, and catalog publication successful"
           else
-            echo "❌ Deployment, verification, or documentation failed"
+            echo "❌ One or more pipeline jobs failed"
           fi
