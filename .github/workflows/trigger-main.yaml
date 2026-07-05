@@ -26,7 +26,7 @@ jobs:
         run: |
           # Space-separated list of APIs to deploy on merge to main.
           # Each name must correspond to a folder under apis/.
-          ALL_APPS="alice"
+          ALL_APPS="alice bob"
           echo "all-apps-list=$ALL_APPS" >> $GITHUB_OUTPUT
           echo "Development apps list: $ALL_APPS"
 
