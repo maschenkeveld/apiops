@@ -17,6 +17,12 @@ export DECK_API_NAME="$APP"
 DECK_API_VERSION="$(major_version "$APP")"
 export DECK_API_VERSION
 
+OAS_FILE="apis/$APP/openapi-spec/openapi-spec-bundled.yaml"
+if [ -f "$OAS_FILE" ]; then
+  DECK_OAS_SPEC_JSON="$(python3 -c "import yaml,json,sys; print(json.dumps(yaml.safe_load(open('$OAS_FILE'))))")"
+  export DECK_OAS_SPEC_JSON
+fi
+
 deck_args=(
   "$FILE" shared/plugin-templates/plugin-templates.yaml
   --konnect-addr "$KONNECT_ADDR"
