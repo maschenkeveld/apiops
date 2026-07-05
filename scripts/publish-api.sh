@@ -107,7 +107,8 @@ for APP in $APPS_LIST; do
     log "  $CATALOG_NAME → portal=$PORTAL_ID svc=${SVC_ID:-not linked}"
 
     cat >> "$YAML_OUT" <<ENTRY
-  - name: "${CATALOG_NAME}"
+  - ref: "${CATALOG_NAME}"
+    name: "${CATALOG_NAME}"
     versions:
       - version: "1.0.0"
         spec:
