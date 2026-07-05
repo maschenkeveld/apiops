@@ -116,6 +116,85 @@ publish_to_portal() {
   log "  published to portal: $portal_name"
 }
 
+# Resolve control plane name → ID; empty string if not found
+cp_id_for() {
+  local name="$1"
+  local encoded; encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$1'))")
+  konnect_get "/v2/control-planes?filter%5Bname%5D=${encoded}" | jq -r '.data[0].id // empty'
+}
+
+# Resolve service name → ID within a control plane; empty if not found
+service_id_for() {
+  local cp_id="$1" name="$2"
+  konnect_get "/v2/control-planes/$cp_id/core-entities/services" | \
+    jq -r ".data[] | select(.name==\"$name\") | .id" | head -1
+}
+
+# Sync gateway service implementations for an API.
+# Creates links that are missing; deletes links no longer declared.
+# Skips silently when the control plane or service doesn't exist yet.
+upsert_implementations() {
+  local api_id="$1" cfg="$2"
+
+  [ -f "$cfg" ] || return 0
+  grep -q '^gateways:' "$cfg" || return 0
+
+  # Parse gateways list from YAML as "cp_name:svc_name" pairs, one per line.
+  # Works on the fixed structure: gateways: / - control_plane: X / service: Y
+  local pairs; pairs=$(awk '
+    /^gateways:/ { in_gw=1; next }
+    /^[^ ]/       { in_gw=0 }
+    in_gw && /control_plane:/ { cp=$NF }
+    in_gw && /service:/        { print cp ":" $NF }
+  ' "$cfg")
+
+  [ -n "$pairs" ] || return 0
+
+  local existing; existing=$(konnect_get "/v3/api-implementations?filter%5Bapi_id%5D=${api_id}")
+
+  # Track desired cp+svc IDs to detect stale links later
+  local desired_pairs=""
+
+  while IFS=: read -r cp_name svc_name; do
+    [ -n "$cp_name" ] || continue
+
+    local cp_id; cp_id=$(cp_id_for "$cp_name")
+    if [ -z "$cp_id" ]; then
+      log "  skipping gateway link: control plane '$cp_name' not found"
+      continue
+    fi
+
+    local svc_id; svc_id=$(service_id_for "$cp_id" "$svc_name")
+    if [ -z "$svc_id" ]; then
+      log "  skipping gateway link: service '$svc_name' not found in '$cp_name'"
+      continue
+    fi
+
+    desired_pairs="${desired_pairs}${cp_id}:${svc_id}"$'\n'
+
+    local impl_id; impl_id=$(echo "$existing" | \
+      jq -r ".data[] | select(.service.control_plane_id==\"$cp_id\" and .service.id==\"$svc_id\") | .id // empty")
+    if [ -z "$impl_id" ]; then
+      konnect_post "/v3/apis/$api_id/implementations" \
+        "{\"service\":{\"control_plane_id\":\"$cp_id\",\"id\":\"$svc_id\"}}" > /dev/null
+      log "  linked gateway: $cp_name / $svc_name"
+    else
+      log "  gateway already linked: $cp_name / $svc_name"
+    fi
+  done <<< "$pairs"
+
+  # Delete implementations no longer declared
+  while IFS= read -r row; do
+    local impl_id; impl_id=$(echo "$row" | jq -r '.id')
+    local impl_cp;  impl_cp=$(echo "$row" | jq -r '.service.control_plane_id')
+    local impl_svc; impl_svc=$(echo "$row" | jq -r '.service.id')
+    if ! echo "$desired_pairs" | grep -qF "${impl_cp}:${impl_svc}"; then
+      konnect_delete "/v3/apis/$api_id/implementations/$impl_id"
+      log "  removed stale gateway link: $impl_cp / $impl_svc"
+    fi
+  done < <(echo "$existing" | jq -c '.data[]')
+}
+
 # ---------- main loop -------------------------------------------------------
 
 for APP in $APPS_LIST; do
@@ -134,13 +213,18 @@ for APP in $APPS_LIST; do
   API_ID=$(upsert_api "$APP" "$APP API")
   upsert_version "$API_ID" "$SPEC"
   upsert_documents "$API_ID" "$MD_DIR"
+  upsert_implementations "$API_ID" "$CFG"
 
   # Publish to portals listed in konnect.yaml
   while IFS= read -r portal_name; do
     [ -n "$portal_name" ] || continue
     PORTAL_ID=$(portal_id_for "$portal_name")
     publish_to_portal "$API_ID" "$PORTAL_ID" "$portal_name"
-  done < <(grep -A20 '^portals:' "$CFG" | grep -E '^\s+-\s+' | awk '{print $2}')
+  done < <(awk '
+    /^portals:/ { in_p=1; next }
+    /^[^ ]/     { in_p=0 }
+    in_p && /^[[:space:]]+-[[:space:]]+[^:]/ { print $2 }
+  ' "$CFG")
 
   ok "$APP published"
 done

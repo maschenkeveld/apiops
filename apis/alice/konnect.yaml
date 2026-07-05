@@ -2,3 +2,8 @@ catalog: true
 portals:
   - apiops-developer-portal
   - apiops-production-portal
+gateways:
+  - control_plane: apiops-development
+    service: alice
+  - control_plane: apiops-production
+    service: alice
