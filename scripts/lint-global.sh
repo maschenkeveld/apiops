@@ -12,6 +12,6 @@ fi
 
 for f in "${files[@]}"; do
   log "Lint global deck file: $f"
-  deck file lint "$RULESET" "$f" --fail-severity error
+  deck file lint --ruleset "$RULESET" "$f" --fail-severity error
 done
 ok "Global deck files lint passed"
