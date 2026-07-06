@@ -4,7 +4,8 @@
 # syncs with per-app namespace isolation, then removes the temp YAML.
 #
 # konnect.yaml format expected per app:
-#   catalog: true
+#   catalog: true           # enables catalog publication (both modes)
+#   portal: true            # enables dev portal publication (portal mode only; default true)
 #   portals:
 #     - apiops-developer-portal     # contains "dev"  → matched to {app}-dev entry
 #     - apiops-production-portal    # contains "prod" → matched to {app} entry
@@ -13,12 +14,18 @@
 #       service: alice
 #     - control_plane: apiops-production
 #       service: alice
+#
+# PUBLISH_MODE:
+#   catalog  — sync catalog entries + spec + implementations (no portal publications)
+#   portal   — full sync including portal publications; respects per-app portal: flag
+#              (defaults to portal for backwards compatibility when not set)
 set -euo pipefail
 source "$(dirname "$0")/lib.sh"
 
 : "${KONNECT_TOKEN:?KONNECT_TOKEN must be set}"
 : "${APPS_LIST:?APPS_LIST must be set}"
 : "${KONNECT_REGION:=eu}"
+: "${PUBLISH_MODE:=portal}"
 
 export KONGCTL_DEFAULT_KONNECT_PAT="$KONNECT_TOKEN"
 
@@ -72,6 +79,16 @@ for APP in $APPS_LIST; do
   enabled=$(grep -E '^catalog:' "$CFG" | awk '{print $2}')
   [ "$enabled" = "true" ] || continue
 
+  # In portal mode, respect the per-app portal: flag (default true)
+  if [ "$PUBLISH_MODE" = "portal" ]; then
+    portal_enabled=$(grep -E '^portal:' "$CFG" | awk '{print $2}')
+    portal_enabled="${portal_enabled:-true}"
+    if [ "$portal_enabled" != "true" ]; then
+      log "$APP: portal: false — skipping portal publication"
+      continue
+    fi
+  fi
+
   SPEC="apis/$APP/openapi-spec/openapi-spec.yaml"
   MD_DIR="apis/$APP/md-files"
   YAML_OUT="${APP}-catalog.yaml"
@@ -84,7 +101,7 @@ for APP in $APPS_LIST; do
     "$SPEC" 2>/dev/null || yq -o=json -I 0 . "$SPEC")
   SPEC_YAML_SAFE="${SPEC_JSON//\'/\'\'}"
 
-  log "Generating $YAML_OUT"
+  log "Generating $YAML_OUT (mode: $PUBLISH_MODE)"
 
   printf '_defaults:\n  kongctl:\n    namespace: %s\n\napis:\n' "$APP" > "$YAML_OUT"
 
@@ -99,22 +116,24 @@ for APP in $APPS_LIST; do
       ENV_KEYWORD="prod"
     fi
 
-    # Resolve the matching portal ID
+    # Resolve portal ID (portal mode only)
     PORTAL_ID=""
-    while IFS= read -r pname; do
-      [ -n "$pname" ] || continue
-      echo "$pname" | grep -q "$ENV_KEYWORD" || continue
-      PORTAL_ID=$(portal_id_for "$pname")
-      break
-    done < <(awk '
-      /^portals:/ { in_p=1; next }
-      /^[^ ]/     { in_p=0 }
-      in_p && /^[[:space:]]+-[[:space:]]+[^:]/ { print $2 }
-    ' "$CFG")
+    if [ "$PUBLISH_MODE" = "portal" ]; then
+      while IFS= read -r pname; do
+        [ -n "$pname" ] || continue
+        echo "$pname" | grep -q "$ENV_KEYWORD" || continue
+        PORTAL_ID=$(portal_id_for "$pname")
+        break
+      done < <(awk '
+        /^portals:/ { in_p=1; next }
+        /^[^ ]/     { in_p=0 }
+        in_p && /^[[:space:]]+-[[:space:]]+[^:]/ { print $2 }
+      ' "$CFG")
 
-    if [ -z "$PORTAL_ID" ]; then
-      log "  no $ENV_KEYWORD portal found, skipping $CATALOG_NAME"
-      continue
+      if [ -z "$PORTAL_ID" ]; then
+        log "  no $ENV_KEYWORD portal found, skipping $CATALOG_NAME"
+        continue
+      fi
     fi
 
     # Resolve CP and service IDs (service may not exist yet — link omitted if missing)
@@ -124,7 +143,7 @@ for APP in $APPS_LIST; do
 
     delete_api_if_exists "$CATALOG_NAME"
 
-    log "  $CATALOG_NAME → portal=$PORTAL_ID svc=${SVC_ID:-not linked}"
+    log "  $CATALOG_NAME → portal=${PORTAL_ID:-none} svc=${SVC_ID:-not linked}"
 
     cat >> "$YAML_OUT" <<ENTRY
   - ref: "${CATALOG_NAME}"
@@ -134,12 +153,17 @@ for APP in $APPS_LIST; do
         version: "1.0.0"
         spec:
           content: '${SPEC_YAML_SAFE}'
+ENTRY
+
+    if [ "$PUBLISH_MODE" = "portal" ]; then
+      cat >> "$YAML_OUT" <<PUB
     publications:
       - ref: "${CATALOG_NAME}-pub"
         portal_id: "${PORTAL_ID}"
         visibility: public
         auto_approve_registrations: false
-ENTRY
+PUB
+    fi
 
     if [ -n "$SVC_ID" ]; then
       cat >> "$YAML_OUT" <<IMPL
@@ -182,6 +206,6 @@ DOC
     --auto-approve \
     --region "$KONNECT_REGION"
 
-  ok "$APP published via kongctl"
+  ok "$APP published via kongctl (mode: $PUBLISH_MODE)"
 
 done
