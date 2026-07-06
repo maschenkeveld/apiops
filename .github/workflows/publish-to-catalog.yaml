@@ -33,7 +33,7 @@ jobs:
           echo "apps_matrix={\"app\":$apps_array}" >> $GITHUB_OUTPUT
 
   publish-catalog:
-    name: Publish API
+    name: To Konnect API Catalog
     needs: setup
     runs-on: ubuntu-latest
     strategy:
@@ -45,7 +45,6 @@ jobs:
         run: |
           RELEASE=$(curl -sf -H "Authorization: Bearer ${{ github.token }}" \
             https://api.github.com/repos/Kong/kongctl/releases/latest)
-          echo "Available assets:"; echo "$RELEASE" | jq -r '.assets[].name'
           ASSET_URL=$(echo "$RELEASE" | jq -r '
             .assets[] | select(.name == "kongctl_linux_amd64.zip")
             | .browser_download_url')
@@ -53,9 +52,8 @@ jobs:
           curl -L "$ASSET_URL" -o kongctl.zip
           unzip -q kongctl.zip kongctl
           sudo mv kongctl /usr/local/bin/
-          kongctl version
 
-      - name: To Konnect API Catalog
+      - name: Publish
         env:
           KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
           KONNECT_REGION: ${{ inputs.konnect_region }}
@@ -63,7 +61,28 @@ jobs:
           PUBLISH_MODE: catalog
         run: ./scripts/publish-api.sh
 
-      - name: To Konnect Dev Portal (production)
+  publish-portal:
+    name: To Konnect Developer Portal
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.apps_matrix) }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Install kongctl
+        run: |
+          RELEASE=$(curl -sf -H "Authorization: Bearer ${{ github.token }}" \
+            https://api.github.com/repos/Kong/kongctl/releases/latest)
+          ASSET_URL=$(echo "$RELEASE" | jq -r '
+            .assets[] | select(.name == "kongctl_linux_amd64.zip")
+            | .browser_download_url')
+          [ -n "$ASSET_URL" ] || { echo "Failed to resolve kongctl release URL"; exit 1; }
+          curl -L "$ASSET_URL" -o kongctl.zip
+          unzip -q kongctl.zip kongctl
+          sudo mv kongctl /usr/local/bin/
+
+      - name: Publish
         env:
           KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
           KONNECT_REGION: ${{ inputs.konnect_region }}
@@ -71,11 +90,18 @@ jobs:
           PUBLISH_MODE: portal
         run: ./scripts/publish-api.sh
 
+  summary:
+    name: Summary
+    needs: [publish-catalog, publish-portal]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
       - name: Summary
-        if: always()
         run: |
-          STATUS="${{ job.status == 'success' && '✅ Published' || '❌ Failed' }}"
+          catalog_status="${{ needs.publish-catalog.result == 'success' && '✅' || '❌' }}"
+          portal_status="${{ needs.publish-portal.result == 'success' && '✅' || '❌' }}"
           echo "# 📖 API Catalog" >> $GITHUB_STEP_SUMMARY
-          echo "| App | Region | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|-----|--------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| ${{ matrix.app }} | ${{ inputs.konnect_region }} | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Apps | Region | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| API Catalog | ${{ inputs.apps_list }} | ${{ inputs.konnect_region }} | $catalog_status |" >> $GITHUB_STEP_SUMMARY
+          echo "| Developer Portal | ${{ inputs.apps_list }} | ${{ inputs.konnect_region }} | $portal_status |" >> $GITHUB_STEP_SUMMARY
