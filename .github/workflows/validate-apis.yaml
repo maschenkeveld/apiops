@@ -1,4 +1,4 @@
-name: Validate APIs
+name: Validate API Specs
 # Reusable workflow: validates OAS specs for every app in apps_list in parallel.
 # Called by the PR trigger (validation only) and the main/release triggers (pre-deploy gate).
 #
@@ -57,7 +57,7 @@ jobs:
         run: ./scripts/validate.sh ${{ matrix.app }}
 
   pipeline-summary:
-    name: Pipeline Summary
+    name: Summary
     needs: [setup-matrix, process-app]
     runs-on: ubuntu-latest
     if: always()

@@ -69,7 +69,7 @@ jobs:
           echo "Generated matrix: $matrix_json"
 
   deploy-app:
-    name: Deploy App to Kong
+    name: Deploy API
     needs: setup-environment
     runs-on: ubuntu-latest
     strategy:
@@ -101,7 +101,7 @@ jobs:
         run: ./scripts/deploy.sh ${{ matrix.app }} ${{ env.CONTROL_PLANE_NAME }}
 
   deployment-summary:
-    name: Deployment Summary
+    name: Summary
     needs: [setup-environment, deploy-app]
     runs-on: ubuntu-latest
     if: always()

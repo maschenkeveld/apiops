@@ -32,7 +32,7 @@ jobs:
           echo "Production apps list: $PRODUCTION_APPS"
 
   kong-pipeline:
-    name: Validate APIs
+    name: Validate API Specs
     needs: setup
     uses: ./.github/workflows/validate-apis.yaml
     with:
@@ -69,7 +69,7 @@ jobs:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   kong-deploy:
-    name: Deploy to Kong Production
+    name: Deploy to Production
     needs: [setup, kong-pipeline, kong-backup, kong-global]
     if: needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success' && needs.kong-global.result == 'success'
     uses: ./.github/workflows/deploy-apis.yaml
@@ -80,7 +80,7 @@ jobs:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   kong-verify:
-    name: Verify Kong Production Deployment
+    name: Verify Deployment
     needs: [setup, kong-pipeline, kong-backup, kong-global, kong-deploy]
     if: needs.kong-deploy.result == 'success'
     uses: ./.github/workflows/verify-deployment.yaml
@@ -90,7 +90,7 @@ jobs:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   publish-catalog:
-    name: Publish to API Catalog
+    name: Publish API
     needs: [setup, kong-pipeline, kong-backup, kong-global, kong-deploy, kong-verify]
     if: needs.kong-verify.result == 'success'
     uses: ./.github/workflows/publish-to-catalog.yaml

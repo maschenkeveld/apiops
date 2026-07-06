@@ -21,7 +21,7 @@ on:
 
 jobs:
   publish-catalog:
-    name: Publish to Konnect API Catalog
+    name: To Konnect API Catalog
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -40,12 +40,31 @@ jobs:
           sudo mv kongctl /usr/local/bin/
           kongctl version
 
-      - name: Publish API Catalog and Portals
+      - name: To Konnect API Catalog
         env:
           KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
           KONNECT_REGION: ${{ inputs.konnect_region }}
           APPS_LIST: ${{ inputs.apps_list }}
         run: ./scripts/publish-api.sh
+
+      - name: To Konnect Dev Portal (production)
+        env:
+          KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+          KONNECT_REGION: ${{ inputs.konnect_region }}
+          APPS_LIST: ${{ inputs.apps_list }}
+        run: |
+          BASE_URL="https://${KONNECT_REGION}.api.konghq.com"
+          for APP in $APPS_LIST; do
+            CATALOG_NAME="${APP}-dev"
+            ENCODED=$(python3 -c "import urllib.parse, sys; print(urllib.parse.quote(sys.argv[1]))" "$CATALOG_NAME")
+            ID=$(curl -sf -H "Authorization: Bearer $KONNECT_TOKEN" \
+              "${BASE_URL}/v3/apis?filter%5Bname%5D=${ENCODED}" | jq -r '.data[0].id // empty')
+            if [ -n "$ID" ]; then
+              echo "✅ ${CATALOG_NAME} live on dev portal"
+            else
+              echo "❌ ${CATALOG_NAME} not found in catalog" && exit 1
+            fi
+          done
 
       - name: Summary
         if: always()

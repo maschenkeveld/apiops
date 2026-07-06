@@ -31,7 +31,7 @@ jobs:
           echo "Development apps list: $ALL_APPS"
 
   kong-pipeline:
-    name: Validate APIs
+    name: Validate API Specs
     needs: setup-apps
     # Gate: all downstream deploy jobs depend on this succeeding.
     uses: ./.github/workflows/validate-apis.yaml
@@ -68,7 +68,7 @@ jobs:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   kong-deploy:
-    name: Deploy to Kong
+    name: Deploy to Development
     needs: [setup-apps, kong-pipeline, kong-backup, kong-global]
     if: ${{ needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success' && needs.kong-global.result == 'success' }}
     uses: ./.github/workflows/deploy-apis.yaml
@@ -79,7 +79,7 @@ jobs:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   kong-verify:
-    name: Verify Kong Deployment
+    name: Verify Deployment
     needs: [setup-apps, kong-pipeline, kong-backup, kong-global, kong-deploy]
     if: ${{ needs.kong-deploy.result == 'success' }}
     uses: ./.github/workflows/verify-deployment.yaml
@@ -89,7 +89,7 @@ jobs:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   publish-catalog:
-    name: Publish to API Catalog
+    name: Publish API
     needs: [setup-apps, kong-verify]
     if: ${{ needs.kong-verify.result == 'success' }}
     uses: ./.github/workflows/publish-to-catalog.yaml

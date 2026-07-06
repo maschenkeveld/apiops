@@ -64,3 +64,18 @@ jobs:
       - name: Lint global deck files
         # Shared script — same one the local runner uses (make lint-global).
         run: ./scripts/lint-global.sh
+
+  summary:
+    name: Summary
+    needs: [setup, lint-apis, lint-global]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Create lint summary
+        run: |
+          echo "# Deck Config Lint Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| API Deck Config | ${{ needs.lint-apis.result == 'success' && '✅ Passed' || needs.lint-apis.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Global Deck Config | ${{ needs.lint-global.result == 'success' && '✅ Passed' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY

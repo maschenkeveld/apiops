@@ -27,7 +27,7 @@ env:
 
 jobs:
   has-changes:
-    name: Detect changes in relevant files
+    name: Detect Changes
     runs-on: ubuntu-latest
     outputs:
       are-changes: ${{ steps.changed-files.outputs.global }}
@@ -43,7 +43,7 @@ jobs:
               - 'global/**'
 
   generate-matrix:
-    name: Generate Component Matrix
+    name: Setup Component Matrix
     runs-on: ubuntu-latest
     outputs:
       control_plane_name: ${{ steps.set-control-plane.outputs.control_plane_name }}
@@ -95,7 +95,7 @@ jobs:
         run: ./scripts/deploy-global.sh "${{ env.CONTROL_PLANE_NAME }}" "${{ matrix.component }}"
 
   deployment-summary:
-    name: Deployment Summary
+    name: Summary
     needs: [has-changes, generate-matrix, deploy-components]
     runs-on: ubuntu-latest
     if: always()

@@ -28,7 +28,7 @@ env:
 
 jobs:
   validate-inputs:
-    name: Validate Input Parameters
+    name: Validate Inputs
     runs-on: ubuntu-latest
     outputs:
       is-valid: ${{ steps.validate.outputs.is-valid }}
@@ -85,7 +85,7 @@ jobs:
           retention-days: 30
 
   summary:
-    name: Backup Summary
+    name: Summary
     needs: [validate-inputs, backup]
     runs-on: ubuntu-latest
     if: always()
