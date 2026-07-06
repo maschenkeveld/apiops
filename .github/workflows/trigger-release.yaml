@@ -69,7 +69,6 @@ jobs:
             TOKEN="$KONNECT_TOKEN"
           fi
           echo "konnect_token=$TOKEN" >> $GITHUB_OUTPUT
-          echo "::add-mask::$TOKEN"
 
   kong-backup:
     name: Backup Kong State
