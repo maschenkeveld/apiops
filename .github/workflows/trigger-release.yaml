@@ -64,6 +64,7 @@ jobs:
     uses: ./.github/workflows/deploy-global-components.yaml
     with:
       environment: production
+      force_deploy: true
     secrets:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 

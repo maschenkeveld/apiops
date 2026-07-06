@@ -10,6 +10,11 @@ on:
         description: 'Environment to deploy to (development, production)'
         required: true
         type: string
+      force_deploy:
+        description: 'Deploy even if no global/ changes detected (for bootstrapping new environments)'
+        required: false
+        type: boolean
+        default: false
     secrets:
       KONNECT_TOKEN:
         description: 'Kong Konnect API token'
@@ -63,7 +68,7 @@ jobs:
     name: Deploy Global Components
     needs: [has-changes, generate-matrix]
     runs-on: ubuntu-latest
-    if: needs.has-changes.outputs.are-changes == 'true'
+    if: needs.has-changes.outputs.are-changes == 'true' || inputs.force_deploy == true
     strategy:
       # Sequential execution is required: consumers depend on consumer groups,
       # and plugins may depend on both. Parallel deployment would cause race conditions.
