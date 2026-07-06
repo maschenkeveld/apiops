@@ -79,7 +79,7 @@ jobs:
       CONTROL_PLANE_NAME: ${{ needs.setup-environment.outputs.control_plane_name }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build Kong Config
         # Shared composite action: bundle → openapi2kong → merge/add-plugins/patch/add-tags/namespace.
@@ -90,7 +90,7 @@ jobs:
 
       - name: Upload Kong Plugined and Patched Config
         # Upload as an artifact for debugging and audit purposes.
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: kong-plugined-and-patched-${{ matrix.app }}.yaml
           path: apis/${{ matrix.app }}/deck-file/generated/kong-plugined-and-patched.yaml

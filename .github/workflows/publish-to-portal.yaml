@@ -67,7 +67,7 @@ jobs:
       portal_id: ${{ steps.portal.outputs.portal_id }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Set control plane name
         id: set-control-plane
@@ -109,7 +109,7 @@ jobs:
       CONTROL_PLANE_NAME: ${{ needs.setup-environment.outputs.control_plane_name }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install redocly CLI
         run: npm i -g @redocly/cli@latest

@@ -41,7 +41,7 @@ jobs:
     steps:
       - name: Checkout repository
         # Full history so scripts/validate.sh can compare against the base branch (origin/main).
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           fetch-depth: 0
 

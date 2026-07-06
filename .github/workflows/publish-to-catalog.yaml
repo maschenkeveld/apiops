@@ -24,7 +24,7 @@ jobs:
     name: Publish to Konnect API Catalog
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - name: Install kongctl
         run: |

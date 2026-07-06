@@ -57,7 +57,7 @@ jobs:
       backup-success: ${{ steps.backup.outputs.success }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install deck
         # Download the official deck release (linux/amd64).
@@ -77,7 +77,7 @@ jobs:
           echo "success=true" >> $GITHUB_OUTPUT
 
       - name: Upload Kong Control Plane Backup
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         if: steps.backup.outputs.success == 'true'
         with:
           name: ${{ steps.backup.outputs.filename }}

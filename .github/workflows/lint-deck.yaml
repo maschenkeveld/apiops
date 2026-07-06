@@ -34,7 +34,7 @@ jobs:
       matrix: ${{ fromJson(needs.setup.outputs.apps_matrix) }}
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Build Kong Config
         id: build
@@ -51,7 +51,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
 
       - name: Install deck
         # Download the official deck release (linux/amd64).
