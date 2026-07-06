@@ -20,9 +20,24 @@ on:
         required: true
 
 jobs:
-  publish-catalog:
-    name: To Konnect API Catalog
+  setup:
+    name: Setup
     runs-on: ubuntu-latest
+    outputs:
+      apps_matrix: ${{ steps.generate-matrix.outputs.apps_matrix }}
+    steps:
+      - name: Generate apps matrix
+        id: generate-matrix
+        run: |
+          apps_array=$(echo "${{ inputs.apps_list }}" | tr ' ' '\n' | jq -R . | jq -s -c .)
+          echo "apps_matrix={\"app\":$apps_array}" >> $GITHUB_OUTPUT
+
+  publish-catalog:
+    name: Publish API
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      matrix: ${{ fromJson(needs.setup.outputs.apps_matrix) }}
     steps:
       - uses: actions/checkout@v7
 
@@ -44,7 +59,7 @@ jobs:
         env:
           KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
           KONNECT_REGION: ${{ inputs.konnect_region }}
-          APPS_LIST: ${{ inputs.apps_list }}
+          APPS_LIST: ${{ matrix.app }}
           PUBLISH_MODE: catalog
         run: ./scripts/publish-api.sh
 
@@ -52,7 +67,7 @@ jobs:
         env:
           KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
           KONNECT_REGION: ${{ inputs.konnect_region }}
-          APPS_LIST: ${{ inputs.apps_list }}
+          APPS_LIST: ${{ matrix.app }}
           PUBLISH_MODE: portal
         run: ./scripts/publish-api.sh
 
@@ -61,6 +76,6 @@ jobs:
         run: |
           STATUS="${{ job.status == 'success' && '✅ Published' || '❌ Failed' }}"
           echo "# 📖 API Catalog" >> $GITHUB_STEP_SUMMARY
-          echo "| Apps | Region | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|------|--------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| ${{ inputs.apps_list }} | ${{ inputs.konnect_region }} | $STATUS |" >> $GITHUB_STEP_SUMMARY
+          echo "| App | Region | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-----|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| ${{ matrix.app }} | ${{ inputs.konnect_region }} | $STATUS |" >> $GITHUB_STEP_SUMMARY
