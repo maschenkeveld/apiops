@@ -4,16 +4,10 @@
 # syncs with per-app namespace isolation, then removes the temp YAML.
 #
 # konnect.yaml format expected per app:
-#   catalog: true           # enables catalog publication (both modes)
-#   portal: true            # enables dev portal publication (portal mode only; default true)
-#   portals:
-#     - apiops-developer-portal     # contains "dev"  → matched to {app}-dev entry
-#     - apiops-production-portal    # contains "prod" → matched to {app} entry
-#   gateways:
-#     - control_plane: apiops-development
-#       service: alice
-#     - control_plane: apiops-production
-#       service: alice
+#   catalog:     true   — enable catalog publication
+#   portal:      true   — enable dev portal publication (portal mode only)
+#   development: true   — publish to apiops-development / apiops-developer-portal
+#   production:  true   — publish to apiops-production  / apiops-production-portal
 #
 # PUBLISH_MODE:
 #   catalog  — sync catalog entries + spec + implementations (no portal publications)
@@ -35,7 +29,6 @@ AUTH=(-H "Authorization: Bearer $KONNECT_TOKEN" -H "Content-Type: application/js
 konnect_get()    { curl -sf "$BASE_URL$1" "${AUTH[@]}"; }
 konnect_delete() { curl -sf -X DELETE "$BASE_URL$1" "${AUTH[@]}" || true; }
 
-# Remove an API catalog entry by name so kongctl can (re)create it under its namespace.
 delete_api_if_exists() {
   local name="$1"
   local encoded; encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$name'))")
@@ -47,7 +40,7 @@ delete_api_if_exists() {
 
 portal_id_for() {
   local name="$1"
-  local encoded; encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$1'))")
+  local encoded; encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$name'))")
   local id; id=$(konnect_get "/v3/portals?filter%5Bname%5D=${encoded}" | jq -r '.data[0].id // empty')
   [ -n "$id" ] || die "portal not found: $name"
   echo "$id"
@@ -55,7 +48,7 @@ portal_id_for() {
 
 cp_id_for() {
   local name="$1"
-  local encoded; encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$1'))")
+  local encoded; encoded=$(python3 -c "import urllib.parse; print(urllib.parse.quote('$name'))")
   konnect_get "/v2/control-planes?filter%5Bname%5D=${encoded}" | jq -r '.data[0].id // empty'
 }
 
@@ -69,6 +62,8 @@ md_title() {
   grep -m1 '^# ' "$1" 2>/dev/null | sed 's/^# //; s/[[:space:]]*$//' || echo "$2"
 }
 
+kv() { grep -E "^$1:" "$2" | awk '{print $2}'; }
+
 declare -a TMPFILES=()
 trap 'rm -f "${TMPFILES[@]}"' EXIT
 
@@ -76,17 +71,11 @@ for APP in $APPS_LIST; do
   CFG="apis/$APP/konnect.yaml"
   [ -f "$CFG" ] || continue
 
-  enabled=$(grep -E '^catalog:' "$CFG" | awk '{print $2}')
-  [ "$enabled" = "true" ] || continue
+  [ "$(kv catalog "$CFG")" = "true" ] || continue
 
-  # In portal mode, respect the per-app portal: flag (default true)
   if [ "$PUBLISH_MODE" = "portal" ]; then
-    portal_enabled=$(grep -E '^portal:' "$CFG" | awk '{print $2}')
-    portal_enabled="${portal_enabled:-true}"
-    if [ "$portal_enabled" != "true" ]; then
-      log "$APP: portal: false — skipping portal publication"
-      continue
-    fi
+    portal_flag=$(kv portal "$CFG")
+    [ "${portal_flag:-true}" = "true" ] || { log "$APP: portal: false — skipping"; continue; }
   fi
 
   SPEC="apis/$APP/openapi-spec/openapi-spec.yaml"
@@ -94,52 +83,35 @@ for APP in $APPS_LIST; do
   YAML_OUT="${APP}-catalog.yaml"
   TMPFILES+=("$YAML_OUT")
 
-  # Convert spec YAML → compact JSON → escape single-quotes for YAML single-quoted string.
-  # (Matches the format kongctl dump produces; !file re-parses JSON as an object, not a string.)
   SPEC_JSON=$(python3 -c \
     "import yaml,json,sys; d=yaml.safe_load(open(sys.argv[1])); print(json.dumps(d,separators=(',',':')))" \
     "$SPEC" 2>/dev/null || yq -o=json -I 0 . "$SPEC")
   SPEC_YAML_SAFE="${SPEC_JSON//\'/\'\'}"
 
   log "Generating $YAML_OUT (mode: $PUBLISH_MODE)"
-
   printf '_defaults:\n  kongctl:\n    namespace: %s\n\napis:\n' "$APP" > "$YAML_OUT"
 
-  while IFS=: read -r cp_name svc_name; do
-    [ -n "$cp_name" ] || continue
+  for ENV in development production; do
+    [ "$(kv "$ENV" "$CFG")" = "true" ] || continue
 
-    if echo "$cp_name" | grep -q 'dev'; then
+    if [ "$ENV" = "development" ]; then
       CATALOG_NAME="${APP}-dev"
-      ENV_KEYWORD="dev"
+      CP_NAME="apiops-development"
+      PORTAL_NAME="apiops-developer-portal"
     else
       CATALOG_NAME="${APP}"
-      ENV_KEYWORD="prod"
+      CP_NAME="apiops-production"
+      PORTAL_NAME="apiops-production-portal"
     fi
 
-    # Resolve portal ID (portal mode only)
     PORTAL_ID=""
     if [ "$PUBLISH_MODE" = "portal" ]; then
-      while IFS= read -r pname; do
-        [ -n "$pname" ] || continue
-        echo "$pname" | grep -q "$ENV_KEYWORD" || continue
-        PORTAL_ID=$(portal_id_for "$pname")
-        break
-      done < <(awk '
-        /^portals:/ { in_p=1; next }
-        /^[^ ]/     { in_p=0 }
-        in_p && /^[[:space:]]+-[[:space:]]+[^:]/ { print $2 }
-      ' "$CFG")
-
-      if [ -z "$PORTAL_ID" ]; then
-        log "  no $ENV_KEYWORD portal found, skipping $CATALOG_NAME"
-        continue
-      fi
+      PORTAL_ID=$(portal_id_for "$PORTAL_NAME")
     fi
 
-    # Resolve CP and service IDs (service may not exist yet — link omitted if missing)
-    CP_ID=$(cp_id_for "$cp_name")
+    CP_ID=$(cp_id_for "$CP_NAME")
     SVC_ID=""
-    [ -n "$CP_ID" ] && SVC_ID=$(service_id_for "$CP_ID" "$svc_name")
+    [ -n "$CP_ID" ] && SVC_ID=$(service_id_for "$CP_ID" "$APP")
 
     delete_api_if_exists "$CATALOG_NAME"
 
@@ -192,12 +164,7 @@ DOC
       done
     fi
 
-  done < <(awk '
-    /^gateways:/ { in_gw=1; next }
-    /^[^ ]/       { in_gw=0 }
-    in_gw && /control_plane:/ { cp=$NF }
-    in_gw && /service:/        { print cp ":" $NF }
-  ' "$CFG")
+  done
 
   kongctl sync konnect \
     -f "$YAML_OUT" \
@@ -206,6 +173,6 @@ DOC
     --auto-approve \
     --region "$KONNECT_REGION"
 
-  ok "$APP published via kongctl (mode: $PUBLISH_MODE)"
+  ok "$APP published (mode: $PUBLISH_MODE)"
 
 done
