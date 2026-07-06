@@ -1,0 +1,2 @@
+export DECK_SERVICE_BACKEND_HOSTNAME=httpbin.httpbin.svc.cluster.local
+export DECK_SERVICE_BACKEND_PORT=80
