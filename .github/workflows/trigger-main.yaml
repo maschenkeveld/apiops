@@ -89,7 +89,7 @@ jobs:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   publish-catalog:
-    name: Publish API
+    name: Publish to Catalog
     needs: [setup-apps, kong-verify]
     if: ${{ needs.kong-verify.result == 'success' }}
     uses: ./.github/workflows/publish-to-catalog.yaml
@@ -99,9 +99,20 @@ jobs:
     secrets:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
+  publish-portal:
+    name: Publish to Portal
+    needs: [setup-apps, kong-verify]
+    if: ${{ needs.kong-verify.result == 'success' }}
+    uses: ./.github/workflows/publish-to-portal.yaml
+    with:
+      apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
+      konnect_region: eu
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
   notify:
     name: Notify Deployment
-    needs: [setup-apps, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, publish-catalog]
+    needs: [setup-apps, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, publish-catalog, publish-portal]
     runs-on: ubuntu-latest
     if: always()
 
@@ -118,8 +129,10 @@ jobs:
           echo "Kong global status: ${{ needs.kong-global.result }}"
           echo "Kong deploy status: ${{ needs.kong-deploy.result }}"
           echo "Kong verify status: ${{ needs.kong-verify.result }}"
-          if [ "${{ needs.kong-pipeline.result }}" = "success" ] && [ "${{ needs.deck-lint.result }}" = "success" ] && [ "${{ needs.kong-backup.result }}" = "success" ] && [ "${{ needs.kong-global.result }}" = "success" ] && [ "${{ needs.kong-deploy.result }}" = "success" ] && [ "${{ needs.kong-verify.result }}" = "success" ] && [ "${{ needs.publish-catalog.result }}" = "success" ]; then
-            echo "✅ Deployment, verification, and catalog publication successful"
+          echo "Publish catalog status: ${{ needs.publish-catalog.result }}"
+          echo "Publish portal status: ${{ needs.publish-portal.result }}"
+          if [ "${{ needs.kong-pipeline.result }}" = "success" ] && [ "${{ needs.deck-lint.result }}" = "success" ] && [ "${{ needs.kong-backup.result }}" = "success" ] && [ "${{ needs.kong-global.result }}" = "success" ] && [ "${{ needs.kong-deploy.result }}" = "success" ] && [ "${{ needs.kong-verify.result }}" = "success" ] && [ "${{ needs.publish-catalog.result }}" = "success" ] && [ "${{ needs.publish-portal.result }}" = "success" ]; then
+            echo "✅ Deployment, verification, and catalog + portal publication successful"
           else
             echo "❌ One or more pipeline jobs failed"
           fi

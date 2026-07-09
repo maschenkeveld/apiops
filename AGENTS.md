@@ -79,7 +79,7 @@ Prefer `make dry-run` / `deck gateway diff` — never `sync` — when inspecting
   | `deploy-global.sh` | `deploy-global-components.yaml` |
   | `deploy.sh` | `deploy-apis.yaml` |
   | `verify.sh` | `verify-deployment.yaml` |
-  | `publish-api.sh` | `publish-to-catalog.yaml` (both PUBLISH_MODE=catalog and portal) |
+  | `publish-api.sh` | `publish-to-catalog.yaml` (catalog) + `publish-to-portal.yaml` (portal) |
 
 - App lists are hard-coded per trigger (`ALL_APPS` in main, `PRODUCTION_APPS` in release) and can
   drift from `apis/` folders — a folder isn't deployed until it's in the list.

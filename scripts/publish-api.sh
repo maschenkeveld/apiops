@@ -73,9 +73,14 @@ for APP in $APPS_LIST; do
 
   [ "$(kv catalog "$CFG")" = "true" ] || continue
 
+  # Each app is published by exactly one mode (portal mode is a superset of catalog: it creates the
+  # catalog API *and* the portal publication). portal:true (or unset) → portal mode owns it;
+  # portal:false → catalog mode owns it. This prevents both modes creating the same API (409).
+  portal_flag=$(kv portal "$CFG")
   if [ "$PUBLISH_MODE" = "portal" ]; then
-    portal_flag=$(kv portal "$CFG")
-    [ "${portal_flag:-true}" = "true" ] || { log "$APP: portal: false — skipping"; continue; }
+    [ "${portal_flag:-true}" = "true" ] || { log "$APP: portal:false — catalog mode handles it"; continue; }
+  else
+    [ "${portal_flag:-true}" = "true" ] && { log "$APP: portal enabled — portal mode handles catalog + portal"; continue; }
   fi
 
   SPEC="apis/$APP/openapi-spec/openapi-spec.yaml"
