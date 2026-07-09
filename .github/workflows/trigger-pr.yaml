@@ -46,19 +46,9 @@ jobs:
     with:
       apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
 
-  generate-docs:
-    name: Generate Documentation
-    needs: [setup-apps, kong-pipeline]
-    # Dry-run doc generation: confirms Redocly can build docs but does not publish.
-    uses: ./.github/workflows/generate-and-publish-documentation.yaml
-    with:
-      environment: "dev"
-      apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
-      deploy_docs: false
-
   pr-summary:
     name: PR Summary
-    needs: [setup-apps, kong-pipeline, deck-lint, generate-docs]
+    needs: [setup-apps, kong-pipeline, deck-lint]
     runs-on: ubuntu-latest
     if: always()
     
@@ -75,11 +65,10 @@ jobs:
           echo "**Validation Results:**" >> $GITHUB_STEP_SUMMARY
           echo "- Kong pipeline status: ${{ needs.kong-pipeline.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Deck lint status: ${{ needs.deck-lint.result }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Documentation generation status: ${{ needs.generate-docs.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
-          
+
           # Overall status
-          if [[ "${{ needs.kong-pipeline.result }}" == "success" && "${{ needs.deck-lint.result }}" == "success" && "${{ needs.generate-docs.result }}" == "success" ]]; then
+          if [[ "${{ needs.kong-pipeline.result }}" == "success" && "${{ needs.deck-lint.result }}" == "success" ]]; then
             echo "## ✅ All validations passed!" >> $GITHUB_STEP_SUMMARY
             echo "This PR is ready for review and merge." >> $GITHUB_STEP_SUMMARY
           else
@@ -90,7 +79,6 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Next Steps:**" >> $GITHUB_STEP_SUMMARY
           echo "1. Review any validation failures above" >> $GITHUB_STEP_SUMMARY
-          echo "2. Check the generated documentation artifacts" >> $GITHUB_STEP_SUMMARY
-          echo "3. Verify breaking changes (if any) are properly documented" >> $GITHUB_STEP_SUMMARY
-          echo "4. Ensure version increments match the scope of changes" >> $GITHUB_STEP_SUMMARY
+          echo "2. Verify breaking changes (if any) are documented in breaking-changes.yaml" >> $GITHUB_STEP_SUMMARY
+          echo "3. Ensure version increments match the scope of changes" >> $GITHUB_STEP_SUMMARY
 
