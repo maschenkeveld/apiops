@@ -73,25 +73,36 @@ semver='^[0-9]+\.[0-9]+(\.[0-9]+)?$'
 printf '%s\n%s\n' "$main_version" "$pr_version" | sort -V -C \
   || die "version not incremented: $main_version → $pr_version"
 
-# 5. breaking changes ------------------------------------------------------
-if ! command -v oasdiff >/dev/null 2>&1; then
-  log "oasdiff not installed — skipping breaking-change check"
-  ok "OpenAPI valid: $APP"
-  exit 0
+# 5. breaking changes (mandatory gate — never skipped) ---------------------
+command -v oasdiff >/dev/null 2>&1 \
+  || die "oasdiff is required for the breaking-change gate but is not installed"
+
+# oasdiff --format json emits a JSON array of breaking changes ([] = none). Parsing the JSON is
+# reliable; a non-array response means oasdiff itself errored → hard fail (never a silent pass).
+err="$(mktemp)"
+set +e
+breaking_json="$(oasdiff breaking "$base_bundled" "$bundled" --format json 2>"$err")"
+set -e
+if ! printf '%s' "$breaking_json" | jq -e 'type == "array"' >/dev/null 2>&1; then
+  die "oasdiff failed to run: $(cat "$err")"
 fi
-breaking="$(oasdiff breaking "$base_bundled" "$bundled" 2>&1 || true)"
-if echo "$breaking" | grep -qi "no breaking changes" || [ -z "$breaking" ]; then
+rm -f "$err"
+breaking_count="$(printf '%s' "$breaking_json" | jq 'length')"
+
+if [ "$breaking_count" -eq 0 ]; then
   ok "OpenAPI valid: $APP (no breaking changes)"
   exit 0
 fi
 
-log "Breaking changes detected for $APP:"
-echo "$breaking" >&2
+log "Breaking changes detected for $APP ($breaking_count):"
+printf '%s' "$breaking_json" | jq -r '.[] | "  - \(.text // .id // "breaking change")"' >&2
+
+# Allowed only if the new version is registered in breaking-changes.yaml; otherwise stop.
 bc_file="apis/$APP/breaking-changes.yaml"
-[ -f "$bc_file" ] || die "breaking changes detected but $bc_file is missing — register version $pr_version"
+[ -f "$bc_file" ] || die "breaking changes detected but $bc_file is missing — register version $pr_version (or revert the change)"
 if yq eval ".breaking_changes[] | select(.version == \"$pr_version\")" "$bc_file" | grep -q "version"; then
   reason="$(yq eval ".breaking_changes[] | select(.version == \"$pr_version\") | .reason" "$bc_file")"
   ok "Breaking changes approved for $pr_version: $reason"
 else
-  die "breaking changes for $pr_version not registered in $bc_file"
+  die "breaking changes for $pr_version not registered in $bc_file — pipeline stopped"
 fi

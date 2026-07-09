@@ -27,9 +27,13 @@ RUN set -eux; \
     chmod +x /usr/local/bin/yq; \
     rm -f /tmp/deck.tgz
 
-# oasdiff (optional; arch-aware install script). Tolerated if unavailable.
-RUN curl -fsSL https://raw.githubusercontent.com/oasdiff/oasdiff/main/install.sh | sh \
-    || echo "WARN: oasdiff install skipped"
+# oasdiff — REQUIRED for the breaking-change gate. Fail the build if it can't be installed.
+# The install script may drop the binary in CWD; move it onto PATH, then verify.
+RUN set -eux; \
+    curl -fsSL https://raw.githubusercontent.com/oasdiff/oasdiff/main/install.sh | sh; \
+    if [ -x ./oasdiff ]; then mv ./oasdiff /usr/local/bin/oasdiff; fi; \
+    command -v oasdiff; \
+    oasdiff --version
 
 # Node CLIs
 RUN npm i -g @redocly/cli@latest @stoplight/spectral-cli@latest

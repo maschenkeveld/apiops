@@ -18,7 +18,6 @@ for APP in "$@"; do
   "$HERE/validate.sh" "$APP"
   "$HERE/build.sh" "$APP"
   "$HERE/lint.sh" "$APP"
-  "$HERE/docs.sh" "$APP" >/dev/null
   "$HERE/deploy.sh" "$APP" "$CP"
 done
 

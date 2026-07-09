@@ -37,7 +37,6 @@ jobs:
         uses: actions/checkout@v7
 
       - name: Build Kong Config
-        id: build
         uses: ./.github/actions/build-kong-config
         with:
           app: ${{ matrix.app }}

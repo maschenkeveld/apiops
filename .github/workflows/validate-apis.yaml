@@ -46,11 +46,15 @@ jobs:
           fetch-depth: 0
 
       - name: Install tooling
+        # oasdiff is REQUIRED for the breaking-change gate — no fallback; the step fails if it's missing.
         run: |
+          set -euo pipefail
           npm i -g @redocly/cli@latest @stoplight/spectral-cli@latest
           sudo wget -q https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
           sudo chmod +x /usr/local/bin/yq
-          curl -fsSL https://raw.githubusercontent.com/oasdiff/oasdiff/main/install.sh | sh || echo "oasdiff install skipped"
+          curl -fsSL https://raw.githubusercontent.com/oasdiff/oasdiff/main/install.sh | sh
+          if [ -x ./oasdiff ]; then sudo mv ./oasdiff /usr/local/bin/oasdiff; fi
+          command -v oasdiff && oasdiff --version
 
       - name: Validate API
         # Shared script — same one the local runner uses (make validate).
