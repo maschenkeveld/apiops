@@ -61,7 +61,7 @@ Every pipeline step is a script here; the matching workflow is a thin wrapper th
 | `deploy-global.sh` | `deploy-global-components.yaml` |
 | `deploy.sh` | `deploy-apis.yaml` |
 | `verify.sh` | `verify-deployment.yaml` |
-| `publish-api.sh` | `publish-to-catalog.yaml` (runs twice per app: `PUBLISH_MODE=catalog` then `portal`) |
+| `publish-api.sh` | `publish-to-catalog.yaml` (`PUBLISH_MODE=catalog`) and `publish-to-portal.yaml` (`PUBLISH_MODE=portal`) |
 | `lib.sh` | sourced by all other scripts (shared helpers, env-var loading) |
 | `demo.sh` | local orchestration — chains per-app steps like the trigger workflows |
 | `control-plane.sh` | env → control-plane name mapping |

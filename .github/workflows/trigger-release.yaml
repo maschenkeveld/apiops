@@ -90,7 +90,7 @@ jobs:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   publish-catalog:
-    name: Publish API
+    name: Publish to Catalog
     needs: [setup, kong-pipeline, kong-backup, kong-global, kong-deploy, kong-verify]
     if: needs.kong-verify.result == 'success'
     uses: ./.github/workflows/publish-to-catalog.yaml
@@ -100,9 +100,20 @@ jobs:
     secrets:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
+  publish-portal:
+    name: Publish to Portal
+    needs: [setup, kong-pipeline, kong-backup, kong-global, kong-deploy, kong-verify]
+    if: needs.kong-verify.result == 'success'
+    uses: ./.github/workflows/publish-to-portal.yaml
+    with:
+      apps_list: ${{ needs.setup.outputs.production-apps-list }}
+      konnect_region: eu
+    secrets:
+      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+
   release-summary:
     name: Release Summary
-    needs: [setup, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, publish-catalog]
+    needs: [setup, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, publish-catalog, publish-portal]
     if: always()
     runs-on: ubuntu-latest
 
@@ -127,10 +138,11 @@ jobs:
           echo "| Global Components | ${{ needs.kong-global.result == 'success' && '✅ Success' || '❌ Failed' }} | Consumer groups, consumers, plugins |" >> $GITHUB_STEP_SUMMARY
           echo "| Kong Deploy | ${{ needs.kong-deploy.result == 'success' && '✅ Success' || '❌ Failed' }} | API deployment to production |" >> $GITHUB_STEP_SUMMARY
           echo "| Kong Verify | ${{ needs.kong-verify.result == 'success' && '✅ Success' || '❌ Failed' }} | Production deployment verification |" >> $GITHUB_STEP_SUMMARY
-          echo "| API Catalog | ${{ needs.publish-catalog.result == 'success' && '✅ Success' || '❌ Failed' }} | APIs published to catalog and portals |" >> $GITHUB_STEP_SUMMARY
+          echo "| API Catalog | ${{ needs.publish-catalog.result == 'success' && '✅ Success' || '❌ Failed' }} | APIs published to the API Catalog |" >> $GITHUB_STEP_SUMMARY
+          echo "| Developer Portal | ${{ needs.publish-portal.result == 'success' && '✅ Success' || '❌ Failed' }} | APIs published to the Developer Portal |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [[ "${{ needs.kong-pipeline.result }}" == "success" && "${{ needs.deck-lint.result }}" == "success" && "${{ needs.kong-backup.result }}" == "success" && "${{ needs.kong-global.result }}" == "success" && "${{ needs.kong-deploy.result }}" == "success" && "${{ needs.kong-verify.result }}" == "success" && "${{ needs.publish-catalog.result }}" == "success" ]]; then
+          if [[ "${{ needs.kong-pipeline.result }}" == "success" && "${{ needs.deck-lint.result }}" == "success" && "${{ needs.kong-backup.result }}" == "success" && "${{ needs.kong-global.result }}" == "success" && "${{ needs.kong-deploy.result }}" == "success" && "${{ needs.kong-verify.result }}" == "success" && "${{ needs.publish-catalog.result }}" == "success" && "${{ needs.publish-portal.result }}" == "success" ]]; then
             echo "## Production deployment completed successfully!" >> $GITHUB_STEP_SUMMARY
           else
             echo "## Production deployment failed" >> $GITHUB_STEP_SUMMARY

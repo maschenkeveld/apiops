@@ -1,7 +1,7 @@
 name: Publish to API Catalog
-# Reusable workflow: for each app in apps_list, reads apis/$APP/konnect.yaml and
-# publishes to the Konnect API Catalog + developer portals if catalog: true.
-# All IDs are resolved by name at runtime.
+# Reusable workflow: for each app in apps_list, reads apis/$APP/konnect.yaml and publishes to the
+# Konnect API Catalog when catalog: true. Developer Portal publication is a separate workflow
+# (publish-to-portal.yaml). All IDs are resolved by name at runtime.
 
 on:
   workflow_call:
@@ -61,47 +61,16 @@ jobs:
           PUBLISH_MODE: catalog
         run: ./scripts/publish-api.sh
 
-  publish-portal:
-    name: To Konnect Developer Portal
-    needs: setup
-    runs-on: ubuntu-latest
-    strategy:
-      matrix: ${{ fromJson(needs.setup.outputs.apps_matrix) }}
-    steps:
-      - uses: actions/checkout@v7
-
-      - name: Install kongctl
-        run: |
-          RELEASE=$(curl -sf -H "Authorization: Bearer ${{ github.token }}" \
-            https://api.github.com/repos/Kong/kongctl/releases/latest)
-          ASSET_URL=$(echo "$RELEASE" | jq -r '
-            .assets[] | select(.name == "kongctl_linux_amd64.zip")
-            | .browser_download_url')
-          [ -n "$ASSET_URL" ] || { echo "Failed to resolve kongctl release URL"; exit 1; }
-          curl -L "$ASSET_URL" -o kongctl.zip
-          unzip -q kongctl.zip kongctl
-          sudo mv kongctl /usr/local/bin/
-
-      - name: Publish
-        env:
-          KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
-          KONNECT_REGION: ${{ inputs.konnect_region }}
-          APPS_LIST: ${{ matrix.app }}
-          PUBLISH_MODE: portal
-        run: ./scripts/publish-api.sh
-
   summary:
     name: Summary
-    needs: [publish-catalog, publish-portal]
+    needs: [publish-catalog]
     runs-on: ubuntu-latest
     if: always()
     steps:
       - name: Summary
         run: |
           catalog_status="${{ needs.publish-catalog.result == 'success' && '✅' || '❌' }}"
-          portal_status="${{ needs.publish-portal.result == 'success' && '✅' || '❌' }}"
           echo "# 📖 API Catalog" >> $GITHUB_STEP_SUMMARY
           echo "| Step | Apps | Region | Status |" >> $GITHUB_STEP_SUMMARY
           echo "|------|------|--------|--------|" >> $GITHUB_STEP_SUMMARY
           echo "| API Catalog | ${{ inputs.apps_list }} | ${{ inputs.konnect_region }} | $catalog_status |" >> $GITHUB_STEP_SUMMARY
-          echo "| Developer Portal | ${{ inputs.apps_list }} | ${{ inputs.konnect_region }} | $portal_status |" >> $GITHUB_STEP_SUMMARY

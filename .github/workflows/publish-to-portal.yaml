@@ -1,149 +1,76 @@
-name: Publish to Dev Portal
-# Reusable workflow: for each API in apps_list, publishes the API to the Konnect Dev Portal.
-# Runs from trigger-release.yaml only (production), after the gateway deploy + verify succeed.
-#
-# The portal ID is resolved one of two ways, controlled by the read_from_openbao input:
-#   • read_from_openbao=false (default) — use the portal_id input (from the KONNECT_PORTAL_ID
-#     variable). No secrets backend / homelab dependency; runs on free hosted runners.
-#   • read_from_openbao=true — fetch portal_id from OpenBao via scripts/portal-id.sh (needs the
-#     VAULT_TOKEN secret and a runner that can reach OpenBao, e.g. self-hosted).
-#
-# Per app, scripts/publish-api.sh:
-#   1. upserts the API + uploads its OpenAPI spec to the Konnect API registry
-#   2. uploads every apis/<app>/md-files/*.md as an API document
-#   3. publishes the API to the portal
-#   4. links the API to its running gateway service (creates an implementation)
+name: Publish to Developer Portal
+# Reusable workflow: for each app in apps_list, reads apis/$APP/konnect.yaml and publishes the API
+# to the Konnect Developer Portal when portal: true. All IDs (portal, control plane, service) are
+# resolved by name at runtime by scripts/publish-api.sh — no OpenBao, no hardcoded IDs.
 
 on:
   workflow_call:
     inputs:
-      environment:
-        description: 'Environment to publish for (production)'
-        required: true
-        type: string
       apps_list:
         description: 'Space-separated list of apps to publish'
         required: true
         type: string
-      portal_id:
-        description: 'Konnect Dev Portal ID (used when read_from_openbao=false)'
+      konnect_region:
+        description: 'Konnect region'
         required: false
         type: string
-        default: ''
-      read_from_openbao:
-        description: 'If true, read portal_id from OpenBao instead of the portal_id input'
-        required: false
-        type: boolean
-        default: false
-      vault_addr:
-        description: 'OpenBao address (used when read_from_openbao=true)'
-        required: false
-        type: string
-        default: 'https://openbao.shared.pve-home.schenkeveld.io'
-      vault_secret_path:
-        description: 'OpenBao KV v1 path holding portal_id (used when read_from_openbao=true)'
-        required: false
-        type: string
-        default: 'kv/konnect/konnect-eu-apiops-production/connection-details'
+        default: 'eu'
     secrets:
       KONNECT_TOKEN:
-        description: 'Kong Konnect API token'
         required: true
-      VAULT_TOKEN:
-        description: 'OpenBao token (only needed when read_from_openbao=true)'
-        required: false
-
-env:
-  KONNECT_ADDR: https://eu.api.konghq.com
-  KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
 jobs:
-  setup-environment:
-    name: Setup Environment
+  setup:
+    name: Setup
     runs-on: ubuntu-latest
     outputs:
-      control_plane_name: ${{ steps.set-control-plane.outputs.control_plane_name }}
       apps_matrix: ${{ steps.generate-matrix.outputs.apps_matrix }}
-      portal_id: ${{ steps.portal.outputs.portal_id }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
-
-      - name: Set control plane name
-        id: set-control-plane
-        run: echo "control_plane_name=$(./scripts/control-plane.sh ${{ inputs.environment }})" >> $GITHUB_OUTPUT
-
-      - name: Resolve portal ID
-        id: portal
-        # false → use the portal_id input (env-var style); true → read from OpenBao.
-        env:
-          VAULT_ADDR: ${{ inputs.vault_addr }}
-          VAULT_TOKEN: ${{ secrets.VAULT_TOKEN }}
-          VAULT_SECRET_PATH: ${{ inputs.vault_secret_path }}
-        run: |
-          if [ "${{ inputs.read_from_openbao }}" = "true" ]; then
-            PID="$(./scripts/portal-id.sh)"
-          else
-            PID="${{ inputs.portal_id }}"
-          fi
-          [ -n "$PID" ] || { echo "❌ portal_id is empty — set the KONNECT_PORTAL_ID variable, or read_from_openbao=true with VAULT_TOKEN"; exit 1; }
-          echo "portal_id=$PID" >> $GITHUB_OUTPUT
-
       - name: Generate apps matrix
         id: generate-matrix
         run: |
-          APPS_TO_PUBLISH="${{ inputs.apps_list }}"
-          echo "📋 Apps to publish for ${{ inputs.environment }}: $APPS_TO_PUBLISH"
-          apps_array=$(echo "$APPS_TO_PUBLISH" | tr ' ' '\n' | jq -R . | jq -s -c .)
-          matrix_json="{\"app\":$apps_array}"
-          echo "apps_matrix=$matrix_json" >> $GITHUB_OUTPUT
-          echo "Generated matrix: $matrix_json"
+          apps_array=$(echo "${{ inputs.apps_list }}" | tr ' ' '\n' | jq -R . | jq -s -c .)
+          echo "apps_matrix={\"app\":$apps_array}" >> $GITHUB_OUTPUT
 
-  publish-app:
-    name: Publish App to Portal
-    needs: setup-environment
+  publish-portal:
+    name: To Konnect Developer Portal
+    needs: setup
     runs-on: ubuntu-latest
     strategy:
-      matrix: ${{ fromJson(needs.setup-environment.outputs.apps_matrix) }}
-    env:
-      CONTROL_PLANE_NAME: ${{ needs.setup-environment.outputs.control_plane_name }}
+      matrix: ${{ fromJson(needs.setup.outputs.apps_matrix) }}
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v7
+      - uses: actions/checkout@v7
 
-      - name: Install redocly CLI
-        run: npm i -g @redocly/cli@latest
-
-      - name: Install yq
+      - name: Install kongctl
         run: |
-          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
-          sudo chmod +x /usr/local/bin/yq
+          RELEASE=$(curl -sf -H "Authorization: Bearer ${{ github.token }}" \
+            https://api.github.com/repos/Kong/kongctl/releases/latest)
+          ASSET_URL=$(echo "$RELEASE" | jq -r '
+            .assets[] | select(.name == "kongctl_linux_amd64.zip")
+            | .browser_download_url')
+          [ -n "$ASSET_URL" ] || { echo "Failed to resolve kongctl release URL"; exit 1; }
+          curl -L "$ASSET_URL" -o kongctl.zip
+          unzip -q kongctl.zip kongctl
+          sudo mv kongctl /usr/local/bin/
 
-      - name: Publish API to portal
-        # Shared script — same one the local runner uses (make publish). Bundles the spec,
-        # then runs scripts/publish-api.sh (upsert + docs + publish + gateway link).
+      - name: Publish
         env:
-          PORTAL_ID: ${{ needs.setup-environment.outputs.portal_id }}
-        run: ./scripts/publish.sh ${{ matrix.app }} ${{ env.CONTROL_PLANE_NAME }}
+          KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
+          KONNECT_REGION: ${{ inputs.konnect_region }}
+          APPS_LIST: ${{ matrix.app }}
+          PUBLISH_MODE: portal
+        run: ./scripts/publish-api.sh
 
-  portal-summary:
-    name: Portal Publish Summary
-    needs: [setup-environment, publish-app]
+  summary:
+    name: Summary
+    needs: [publish-portal]
     runs-on: ubuntu-latest
     if: always()
     steps:
-      - name: Create Portal Summary
+      - name: Summary
         run: |
-          echo "# 📡 Dev Portal Publish Summary" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "**Environment:** ${{ inputs.environment }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Control Plane:** ${{ needs.setup-environment.outputs.control_plane_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Apps Published:** ${{ inputs.apps_list }}" >> $GITHUB_STEP_SUMMARY
-          echo "**Publish Time:** $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          if [[ "${{ needs.publish-app.result }}" == "success" ]]; then
-            echo "## ✅ All APIs published to the portal" >> $GITHUB_STEP_SUMMARY
-          else
-            echo "## ❌ Some APIs failed to publish" >> $GITHUB_STEP_SUMMARY
-            echo "Check the individual job logs for details." >> $GITHUB_STEP_SUMMARY
-          fi
+          portal_status="${{ needs.publish-portal.result == 'success' && '✅' || '❌' }}"
+          echo "# 🌐 Developer Portal" >> $GITHUB_STEP_SUMMARY
+          echo "| Step | Apps | Region | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|------|------|--------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Developer Portal | ${{ inputs.apps_list }} | ${{ inputs.konnect_region }} | $portal_status |" >> $GITHUB_STEP_SUMMARY
