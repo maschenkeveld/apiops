@@ -26,7 +26,7 @@ jobs:
         run: |
           # Space-separated list of all APIs to validate on every PR.
           # Each name must correspond to a folder under apis/.
-          ALL_APPS="httpbin company company-mocked domain domain-mocked domain-users domain-users-mocked portal portal-mocked portal-users portal-users-mocked"
+          ALL_APPS="alice bob"
           echo "all-apps-list=$ALL_APPS" >> $GITHUB_OUTPUT
           echo "PR validation apps list: $ALL_APPS"
 
