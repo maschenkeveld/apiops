@@ -18,17 +18,17 @@ DOCKER_RUN = docker run --rm -it \
   $(if $(wildcard $(ENV_FILE)),--env-file $(ENV_FILE),) \
   -v $(REPO_ROOT):/work -w /work $(IMAGE):$(TAG)
 
-.PHONY: image demo dry-run validate build lint lint-global docs deploy deploy-global backup verify publish shell help
+.PHONY: image demo dry-run validate build lint lint-global deploy deploy-global backup verify publish shell help
 
 help:
-	@echo "Targets: image | demo | dry-run | validate | build | lint | lint-global | docs |"
+	@echo "Targets: image | demo | dry-run | validate | build | lint | lint-global |"
 	@echo "         deploy | deploy-global | backup | verify | publish | shell"
 	@echo "Vars:    CP=$(CP)  APP=$(APP)  APPS='$(APPS)'  IMAGE=$(IMAGE):$(TAG)"
 
 image: ## Build the pinned tooling image (run once)
 	docker build -t $(IMAGE):$(TAG) $(REPO_ROOT)/scripts
 
-demo: ## Full flow for APPS: validate→build→lint→docs→deploy→verify→publish
+demo: ## Full flow for APPS: validate→build→lint→deploy→verify→publish
 	$(DOCKER_RUN) scripts/demo.sh $(CP) $(APPS)
 
 dry-run: ## Same as demo but diff-only, no writes, no publish
@@ -46,9 +46,6 @@ lint: ## deck file lint the built config for one APP
 lint-global: ## deck file lint the global deck files
 	$(DOCKER_RUN) scripts/lint-global.sh
 
-docs: ## build HTML docs for one APP
-	$(DOCKER_RUN) scripts/docs.sh $(APP)
-
 deploy: ## diff+sync one APP to CP (DRY_RUN=1 for diff only)
 	$(DOCKER_RUN) bash -c "DRY_RUN=$${DRY_RUN:-0} scripts/deploy.sh $(APP) $(CP)"
 
@@ -61,8 +58,8 @@ backup: ## dump CP state to backups/
 verify: ## ping CP
 	$(DOCKER_RUN) scripts/verify.sh $(CP)
 
-publish: ## publish one APP to the Dev Portal
-	$(DOCKER_RUN) scripts/publish.sh $(APP) $(CP)
+publish: ## publish one APP to the Konnect API Catalog + Developer Portal
+	$(DOCKER_RUN) bash -c "KONNECT_REGION=eu APPS_LIST=$(APP) PUBLISH_MODE=portal scripts/publish-api.sh"
 
 shell: ## open a shell in the tooling image
 	$(DOCKER_RUN) bash

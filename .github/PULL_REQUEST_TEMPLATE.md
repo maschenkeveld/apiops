@@ -1,37 +1,47 @@
 ## Description
 
-Add Description
+<!-- What does this PR change and why? -->
 
-## Azure Devops User Story/Task
+## Related issue
 
-[Description](URL)
+Closes #
 
 ## Type of Change
 
-<!-- Indicate the type of change your PR introduces to the API. -->
+<!-- Check all that apply. -->
 
-- [ ] New API feature
+- [ ] New API
+- [ ] API feature / change
 - [ ] Bug fix
 - [ ] Breaking change
 - [ ] Documentation update
 - [ ] Deprecation
+- [ ] Pipeline / tooling
 
 ## Breaking Changes
 
-- Does this PR introduce breaking changes? [ ] Yes [ ] No
+- Does this PR introduce breaking changes to an API? [ ] Yes [ ] No
 
-<!-- If yes, explain the impact and required steps for users to adapt to this change. -->
+<!-- If yes: describe the impact + migration, and register the new version in
+     apis/<name>/breaking-changes.yaml (CI blocks otherwise). -->
 
 ## Versioning
 
-<!-- Update the API version if relevant, according to your versioning strategy (e.g., semantic versioning). Provide details about the version change. -->
+<!-- Only if a spec changed. Bump apis/<name>/openapi-spec info.version (semver). -->
 
-Current API version: x.y.z
-New API version (if applicable): x.y.z
+- Current version: `x.y.z`
+- New version: `x.y.z`
+
+## Pre-merge checklist
+
+<!-- CI (validate.sh) fails the PR if these aren't met when a spec changes. -->
+
+- [ ] `apis/<name>/changelog.md` last line updated to match the spec `info.version`
+- [ ] Version bumped (valid semver) if the OpenAPI spec changed
+- [ ] Breaking changes registered in `apis/<name>/breaking-changes.yaml`
+- [ ] Spectral + deck lint pass locally (`cd scripts && make validate build lint APP=<name>`)
+- [ ] New API? added to the app list(s) in `trigger-main.yaml` / `trigger-release.yaml`, and `konnect.yaml` present
 
 ## Compatibility
 
-<!-- Describe any potential backward compatibility issues or changes. Address how this update accommodates existing clients and codebases. -->
-
-## Swagger/OpenAPI Specification Changes
-
+<!-- Backward-compatibility notes for existing clients, if any. -->
