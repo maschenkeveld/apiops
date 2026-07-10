@@ -14,13 +14,17 @@ plugins:
     route: alice_getidentify
     _config: shared-rate-limiting-advanced
     partials:
-      - id: 7283b615-1315-480c-95b9-78b88e0e2f43 # THIS IS NOT VERY USER FRIENDLY, BETTER USE NAME-BASED LOOKUP
+      # Reference the global redis partial by name; deck resolves the id at sync time via
+      # _info.default_lookup_tags.partials (global-redis). Keeps the config free of hardcoded UUIDs.
+      - name: shared-redis
+        path: config.redis
   - name: rate-limiting-advanced
     consumer_group: gold
     route: alice_getidentify
     _config: shared-rate-limiting-advanced
     partials:
-      - id: 7283b615-1315-480c-95b9-78b88e0e2f43
+      - name: shared-redis
+        path: config.redis
     config:
       limit:
         - 10
