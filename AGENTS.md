@@ -93,8 +93,16 @@ Prefer `make dry-run` / `deck gateway diff` — never `sync` — when inspecting
   drift from `apis/` folders — a folder isn't deployed until it's in the list.
 - Deploy jobs are chained on `success` with `deck-lint` gating before any write; gateway writes
   are `--select-tag <api> <version>` scoped. Preserve both.
-- `force_deploy: true` on `deploy-global-components.yaml` in the production trigger ensures global
-  components always sync, even with no `global/` file changes (bootstraps a fresh control plane).
+- Global components only sync on `global/` changes. To **force** a full sync (bootstrap a fresh or
+  reset control plane): production always forces it (`force_deploy: true` in `trigger-release.yaml`);
+  development has a `workflow_dispatch` switch — run *Deploy to Development* with `force_global: true`.
+- **Reset gotcha:** after `deck gateway reset` the control plane is empty. A plain API push then
+  **skips** the global stage (no `global/` diff) and API deploys fail on missing consumer
+  groups/partials (e.g. `consumer-group bronze ... entity not found`). Bootstrap first via the dev
+  `force_global` dispatch or a `global/` change.
+- APIs reference global entities **by name**, not UUID — e.g. alice's rate-limiting-advanced plugin
+  references the `shared-redis` partial by name via `_info.default_lookup_tags.partials`. Partial
+  **names are immutable** in Konnect; to rename one, reset/delete it then re-sync.
 - Scripts log to stderr, print data (paths/ids) to stdout, so workflows can capture output.
 
 ## Style
