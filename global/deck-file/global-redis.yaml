@@ -1,4 +1,8 @@
 _format_version: "3.0"
+# Shared redis partial. Referenced by APIs (e.g. alice) by NAME (shared-redis) via
+# _info.default_lookup_tags.partials: [global-redis] — not by the id below — so this partial can be
+# recreated without touching referrers. The name is immutable in Konnect once created; to rename,
+# reset/delete the partial first, then re-sync.
 partials:
 - config:
     cluster_max_redirections: 5
