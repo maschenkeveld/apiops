@@ -1,10 +1,10 @@
-name: Build Kong Config
+name: Generate Kong Config
 description: >
-  Build a Kong deck file for one API from its OpenAPI spec, applying additions, plugins,
-  shared + API-specific patches, tags and route namespacing. Shared by deploy-apis.yaml
-  (which then diffs/syncs it) and lint-deck.yaml (which then lints it).
-  The caller must have already run actions/checkout. Outputs the generated deck file at
-  apis/<app>/deck-file/generated/kong-plugined-and-patched.yaml.
+  Generate a Kong deck file for one API from its OpenAPI spec, applying additions, plugins,
+  shared + API-specific patches, tags and route namespacing. Used by generate-deck.yaml, which
+  uploads the result as an artifact; lint-deck and deploy-apis then consume that artifact so the
+  deck is generated exactly once per run. The caller must have already run actions/checkout.
+  Outputs the generated deck file at apis/<app>/deck-file/generated/kong-plugined-and-patched.yaml.
 
 inputs:
   app:
@@ -33,7 +33,7 @@ runs:
         sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
         sudo chmod +x /usr/local/bin/yq
 
-    - name: Build Kong Config
-      # Delegates to the shared build script so the local runner and CI build identically.
+    - name: Generate Kong Config
+      # Delegates to the shared generate script so the local runner and CI generate identically.
       shell: bash
-      run: ./scripts/build.sh ${{ inputs.app }}
+      run: ./scripts/generate.sh ${{ inputs.app }}

@@ -24,11 +24,11 @@ make image                             # build the tooling image once
 
 | Command | What it does | Needs creds? |
 |---|---|---|
-| `make demo APPS="alice bob"` | Full flow: validate → build → lint → deploy → verify → publish | yes |
+| `make demo APPS="alice bob"` | Full flow: validate → generate → lint → deploy → verify → publish | yes |
 | `make dry-run APPS="alice bob"` | Same but `deck gateway diff` only, no writes | yes (read-only) |
 | `make validate APP=alice` | OpenAPI validate (spectral + changelog/semver/breaking vs main) | no |
-| `make build APP=alice` | Build the deck config for one API | no |
-| `make lint APP=alice` | `deck file lint` the built config | no |
+| `make generate APP=alice` | Generate the deck config for one API | no |
+| `make lint APP=alice` | `deck file lint` the generated config | no |
 | `make lint-global` | `deck file lint` the global deck files | no |
 | `make deploy APP=alice` | diff + sync one API to `CP` (`DRY_RUN=1` for diff only) | yes |
 | `make deploy-global` | diff + sync global components to `CP` (`DRY_RUN=1` for diff only) | yes |
@@ -41,7 +41,7 @@ Variables: `CP` (control plane, default `apiops-development`), `APP` (single app
 
 ```bash
 # Offline — no Konnect, no creds: prove spec → deck → lint
-make build lint APP=alice
+make generate lint APP=alice
 
 # Full end-to-end demo against development
 make demo CP=apiops-development APPS="alice bob"
@@ -54,10 +54,10 @@ Every pipeline step is a script here; the matching workflow is a thin wrapper th
 | Script | Called by |
 |---|---|
 | `validate.sh` | `validate-apis.yaml` |
-| `build.sh` | `build-kong-config` action (used by `deploy-apis.yaml` + `lint-deck.yaml`) |
+| `generate.sh` | `generate-kong-config` action (used by `generate-deck.yaml`) |
 | `lint.sh` | `lint-deck.yaml` (per-API) |
 | `lint-global.sh` | `lint-deck.yaml` (global files) |
-| `backup.sh` | `backup-kong-control-plane.yaml` |
+| `backup.sh` | `deploy-apis.yaml` (before each app) + `deploy-global-components.yaml` (before global sync) |
 | `deploy-global.sh` | `deploy-global-components.yaml` |
 | `deploy.sh` | `deploy-apis.yaml` |
 | `verify.sh` | `verify-deployment.yaml` |
@@ -66,9 +66,13 @@ Every pipeline step is a script here; the matching workflow is a thin wrapper th
 | `demo.sh` | local orchestration — chains per-app steps like the trigger workflows |
 | `control-plane.sh` | env → control-plane name mapping |
 
+In CI the deck is **generated once** (`generate-deck.yaml` → `deck-<app>` artifact); `lint-deck.yaml`
+and `deploy-apis.yaml` download that artifact instead of regenerating. `deploy.sh` and `lint.sh`
+therefore expect the generated file to already exist (locally, `make generate` produces it first).
+
 ## Notes
 
-- `build`/`lint`/`validate` never touch Konnect (env-vars resolve at sync time, matching CI).
+- `generate`/`lint`/`validate` never touch Konnect (env-vars resolve at sync time, matching CI).
 - `deploy`/`publish-api.sh` write to live Konnect — for offline checks use `make dry-run` or
-  `make build lint`.
+  `make generate lint`.
 - The image installs the real `deck` and `kongctl` releases per-arch.

@@ -1,7 +1,10 @@
 name: Lint Deck Config
-# Reusable workflow: builds each API's Kong deck file (the same way deploy-apis.yaml does) and
-# lints it against shared/deck-linting/ruleset.yaml. Also lints the hand-written global deck files.
-# error-level findings fail the build (blocking gate); warn-level findings are reported only.
+# Reusable workflow: lints each API's Kong deck config against shared/deck-linting/ruleset.yaml,
+# and lints the hand-written global deck files. error-level findings fail the build (blocking
+# gate); warn-level findings are reported only.
+#
+# The per-API deck config is NOT regenerated here — it is downloaded from the deck-<app> artifact
+# produced once by generate-deck.yaml, so the linted config is byte-identical to the deployed one.
 #
 # This is the deck-level counterpart to the Spectral OpenAPI linting in validate-apis.yaml.
 
@@ -36,10 +39,21 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Build Kong Config
-        uses: ./.github/actions/build-kong-config
+      - name: Install deck
+        # Download the official deck release (linux/amd64).
+        run: |
+          DECK_VERSION=1.49.1
+          curl -sL "https://github.com/Kong/deck/releases/download/v${DECK_VERSION}/deck_${DECK_VERSION}_linux_amd64.tar.gz" -o deck.tar.gz
+          sudo tar -xzf deck.tar.gz -C /usr/local/bin deck
+          sudo chmod +x /usr/local/bin/deck
+
+      - name: Download generated deck artifact
+        # Consume the deck config generated once by generate-deck.yaml — no regeneration here.
+        # Reconstructs apis/<app>/deck-file/generated/kong-plugined-and-patched.yaml.
+        uses: actions/download-artifact@v7
         with:
-          app: ${{ matrix.app }}
+          name: deck-${{ matrix.app }}
+          path: apis/${{ matrix.app }}
 
       - name: Lint deck config
         # Shared script: same lint the local runner uses. error-level findings block.

@@ -33,22 +33,32 @@ jobs:
   kong-pipeline:
     name: Validate APIs
     needs: setup-apps
-    # Validates OAS specs, lints, checks semver and breaking changes for every app.
+    # Step 1 — Validate OAS specs, lint, check semver and breaking changes for every app.
     uses: ./.github/workflows/validate-apis.yaml
+    with:
+      apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
+
+  kong-generate:
+    name: Generate Deck Config
+    needs: [setup-apps, kong-pipeline]
+    # Step 2 — Generate each API's deck config once and upload it as an artifact.
+    if: ${{ needs.kong-pipeline.result == 'success' }}
+    uses: ./.github/workflows/generate-deck.yaml
     with:
       apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
 
   deck-lint:
     name: Lint Deck Config
-    needs: setup-apps
-    # Builds each API's deck file and lints it (blocking). Deck-level counterpart to the OAS lint.
+    needs: [setup-apps, kong-generate]
+    # Step 3 — Lint the generated deck artifact (blocking). Deck-level counterpart to the OAS lint.
+    if: ${{ needs.kong-generate.result == 'success' }}
     uses: ./.github/workflows/lint-deck.yaml
     with:
       apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
 
   pr-summary:
     name: PR Summary
-    needs: [setup-apps, kong-pipeline, deck-lint]
+    needs: [setup-apps, kong-pipeline, kong-generate, deck-lint]
     runs-on: ubuntu-latest
     if: always()
     
@@ -64,11 +74,12 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Validation Results:**" >> $GITHUB_STEP_SUMMARY
           echo "- Kong pipeline status: ${{ needs.kong-pipeline.result }}" >> $GITHUB_STEP_SUMMARY
+          echo "- Generate deck status: ${{ needs.kong-generate.result }}" >> $GITHUB_STEP_SUMMARY
           echo "- Deck lint status: ${{ needs.deck-lint.result }}" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           # Overall status
-          if [[ "${{ needs.kong-pipeline.result }}" == "success" && "${{ needs.deck-lint.result }}" == "success" ]]; then
+          if [[ "${{ needs.kong-pipeline.result }}" == "success" && "${{ needs.kong-generate.result }}" == "success" && "${{ needs.deck-lint.result }}" == "success" ]]; then
             echo "## ✅ All validations passed!" >> $GITHUB_STEP_SUMMARY
             echo "This PR is ready for review and merge." >> $GITHUB_STEP_SUMMARY
           else

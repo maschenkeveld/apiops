@@ -3,7 +3,7 @@
 #
 # Override defaults inline, e.g.:
 #   make demo CP=apiops-development APPS="alice bob"
-#   make build APP=alice
+#   make generate APP=alice
 
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
 IMAGE     ?= apiops-local
@@ -18,17 +18,17 @@ DOCKER_RUN = docker run --rm -it \
   $(if $(wildcard $(ENV_FILE)),--env-file $(ENV_FILE),) \
   -v $(REPO_ROOT):/work -w /work $(IMAGE):$(TAG)
 
-.PHONY: image demo dry-run validate build lint lint-global deploy deploy-global backup verify publish shell help
+.PHONY: image demo dry-run validate generate lint lint-global deploy deploy-global backup verify publish shell help
 
 help:
-	@echo "Targets: image | demo | dry-run | validate | build | lint | lint-global |"
+	@echo "Targets: image | demo | dry-run | validate | generate | lint | lint-global |"
 	@echo "         deploy | deploy-global | backup | verify | publish | shell"
 	@echo "Vars:    CP=$(CP)  APP=$(APP)  APPS='$(APPS)'  IMAGE=$(IMAGE):$(TAG)"
 
 image: ## Build the pinned tooling image (run once)
 	docker build -t $(IMAGE):$(TAG) $(REPO_ROOT)/scripts
 
-demo: ## Full flow for APPS: validate→build→lint→deploy→verify→publish
+demo: ## Full flow for APPS: validate→generate→lint→deploy→verify→publish
 	$(DOCKER_RUN) scripts/demo.sh $(CP) $(APPS)
 
 dry-run: ## Same as demo but diff-only, no writes, no publish
@@ -37,10 +37,10 @@ dry-run: ## Same as demo but diff-only, no writes, no publish
 validate: ## OpenAPI validate one APP (spectral + changelog/semver/breaking vs main)
 	$(DOCKER_RUN) scripts/validate.sh $(APP)
 
-build: ## Build the deck config for one APP
-	$(DOCKER_RUN) scripts/build.sh $(APP)
+generate: ## Generate the deck config for one APP
+	$(DOCKER_RUN) scripts/generate.sh $(APP)
 
-lint: ## deck file lint the built config for one APP
+lint: ## deck file lint the generated config for one APP
 	$(DOCKER_RUN) scripts/lint.sh $(APP)
 
 lint-global: ## deck file lint the global deck files

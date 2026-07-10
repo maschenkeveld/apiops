@@ -1,6 +1,12 @@
 name: Deploy to Production
 # Deploys to the production Konnect control plane on every push to the production branch.
 # Promote by merging main into production: git push origin main:production
+#
+# Jobs are chained so the per-API sequence is always enforced:
+#   Validate OAS → Generate Deck (once) → Lint Deck → Global Components → Deploy APIs → Verify
+#   → Publish Catalog → Publish Portal
+# The deck is generated exactly once; lint and deploy consume that artifact. Global components
+# deploy before APIs, and each deploy stage backs up the control plane before writing.
 on:
   push:
     branches:
@@ -34,33 +40,35 @@ jobs:
   kong-pipeline:
     name: Validate API Specs
     needs: setup
+    # Step 1 — Validate OAS.
     uses: ./.github/workflows/validate-apis.yaml
+    with:
+      apps_list: ${{ needs.setup.outputs.production-apps-list }}
+
+  kong-generate:
+    name: Generate Deck Config
+    needs: [setup, kong-pipeline]
+    # Step 2 — Generate the deck config ONCE per app and upload it as an artifact.
+    if: needs.kong-pipeline.result == 'success'
+    uses: ./.github/workflows/generate-deck.yaml
     with:
       apps_list: ${{ needs.setup.outputs.production-apps-list }}
 
   deck-lint:
     name: Lint Deck Config
-    needs: setup
-    # Blocking gate: lint the generated deck config before any write to production Konnect.
+    needs: [setup, kong-generate]
+    # Step 3 — Blocking gate: lint the generated deck artifact before any write to production Konnect.
+    if: needs.kong-generate.result == 'success'
     uses: ./.github/workflows/lint-deck.yaml
     with:
       apps_list: ${{ needs.setup.outputs.production-apps-list }}
 
-  kong-backup:
-    name: Backup Kong State
-    needs: [setup, kong-pipeline, deck-lint]
-    if: needs.kong-pipeline.result == 'success' && needs.deck-lint.result == 'success'
-    uses: ./.github/workflows/backup-kong-control-plane.yaml
-    with:
-      environment: "production"
-      control_plane_name: "apiops-production"
-    secrets:
-      KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
-
   kong-global:
     name: Deploy Global Components to Production
-    needs: [setup, kong-pipeline, kong-backup]
-    if: needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success'
+    needs: [setup, deck-lint]
+    # Step 4 — Global components deploy FIRST. force_deploy bootstraps a fresh control plane
+    # even with no global/ changes. This workflow backs up the control plane before syncing.
+    if: needs.deck-lint.result == 'success'
     uses: ./.github/workflows/deploy-global-components.yaml
     with:
       environment: production
@@ -70,8 +78,10 @@ jobs:
 
   kong-deploy:
     name: Deploy to Production
-    needs: [setup, kong-pipeline, kong-backup, kong-global]
-    if: needs.kong-pipeline.result == 'success' && needs.kong-backup.result == 'success' && needs.kong-global.result == 'success'
+    needs: [setup, kong-generate, kong-global]
+    # Step 5 — Deploy APIs sequentially (max-parallel: 1). Each app: backup → diff → sync,
+    # consuming the generated artifact. Runs only after global components succeed.
+    if: needs.kong-global.result == 'success'
     uses: ./.github/workflows/deploy-apis.yaml
     with:
       environment: production
@@ -81,7 +91,8 @@ jobs:
 
   kong-verify:
     name: Verify Deployment
-    needs: [setup, kong-pipeline, kong-backup, kong-global, kong-deploy]
+    needs: [setup, kong-deploy]
+    # Step 6 — Verify the deployment.
     if: needs.kong-deploy.result == 'success'
     uses: ./.github/workflows/verify-deployment.yaml
     with:
@@ -91,7 +102,8 @@ jobs:
 
   publish-catalog:
     name: Publish to Catalog
-    needs: [setup, kong-pipeline, kong-backup, kong-global, kong-deploy, kong-verify]
+    needs: [setup, kong-verify]
+    # Step 7 — Publish APIs to the API Catalog.
     if: needs.kong-verify.result == 'success'
     uses: ./.github/workflows/publish-to-catalog.yaml
     with:
@@ -102,7 +114,8 @@ jobs:
 
   publish-portal:
     name: Publish to Portal
-    needs: [setup, kong-pipeline, kong-backup, kong-global, kong-deploy, kong-verify]
+    needs: [setup, kong-verify]
+    # Step 8 — Publish APIs to the Developer Portal.
     if: needs.kong-verify.result == 'success'
     uses: ./.github/workflows/publish-to-portal.yaml
     with:
@@ -113,7 +126,7 @@ jobs:
 
   release-summary:
     name: Release Summary
-    needs: [setup, kong-pipeline, deck-lint, kong-backup, kong-global, kong-deploy, kong-verify, publish-catalog, publish-portal]
+    needs: [setup, kong-pipeline, kong-generate, deck-lint, kong-global, kong-deploy, kong-verify, publish-catalog, publish-portal]
     if: always()
     runs-on: ubuntu-latest
 
@@ -133,16 +146,16 @@ jobs:
           echo "| Stage | Status | Description |" >> $GITHUB_STEP_SUMMARY
           echo "|-------|--------|-------------|" >> $GITHUB_STEP_SUMMARY
           echo "| Kong Pipeline | ${{ needs.kong-pipeline.result == 'success' && '✅ Success' || '❌ Failed' }} | API validation and breaking changes check |" >> $GITHUB_STEP_SUMMARY
+          echo "| Generate Deck | ${{ needs.kong-generate.result == 'success' && '✅ Success' || '❌ Failed' }} | Deck config generated once per API |" >> $GITHUB_STEP_SUMMARY
           echo "| Deck Lint | ${{ needs.deck-lint.result == 'success' && '✅ Success' || '❌ Failed' }} | Deck config linting |" >> $GITHUB_STEP_SUMMARY
-          echo "| Kong Backup | ${{ needs.kong-backup.result == 'success' && '✅ Success' || '❌ Failed' }} | Production control plane backup |" >> $GITHUB_STEP_SUMMARY
-          echo "| Global Components | ${{ needs.kong-global.result == 'success' && '✅ Success' || '❌ Failed' }} | Consumer groups, consumers, plugins |" >> $GITHUB_STEP_SUMMARY
-          echo "| Kong Deploy | ${{ needs.kong-deploy.result == 'success' && '✅ Success' || '❌ Failed' }} | API deployment to production |" >> $GITHUB_STEP_SUMMARY
+          echo "| Global Components | ${{ needs.kong-global.result == 'success' && '✅ Success' || '❌ Failed' }} | Backup + consumer groups, consumers, plugins |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kong Deploy | ${{ needs.kong-deploy.result == 'success' && '✅ Success' || '❌ Failed' }} | Sequential API deployment to production (backup per app) |" >> $GITHUB_STEP_SUMMARY
           echo "| Kong Verify | ${{ needs.kong-verify.result == 'success' && '✅ Success' || '❌ Failed' }} | Production deployment verification |" >> $GITHUB_STEP_SUMMARY
           echo "| API Catalog | ${{ needs.publish-catalog.result == 'success' && '✅ Success' || '❌ Failed' }} | APIs published to the API Catalog |" >> $GITHUB_STEP_SUMMARY
           echo "| Developer Portal | ${{ needs.publish-portal.result == 'success' && '✅ Success' || '❌ Failed' }} | APIs published to the Developer Portal |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
-          if [[ "${{ needs.kong-pipeline.result }}" == "success" && "${{ needs.deck-lint.result }}" == "success" && "${{ needs.kong-backup.result }}" == "success" && "${{ needs.kong-global.result }}" == "success" && "${{ needs.kong-deploy.result }}" == "success" && "${{ needs.kong-verify.result }}" == "success" && "${{ needs.publish-catalog.result }}" == "success" && "${{ needs.publish-portal.result }}" == "success" ]]; then
+          if [[ "${{ needs.kong-pipeline.result }}" == "success" && "${{ needs.kong-generate.result }}" == "success" && "${{ needs.deck-lint.result }}" == "success" && "${{ needs.kong-global.result }}" == "success" && "${{ needs.kong-deploy.result }}" == "success" && "${{ needs.kong-verify.result }}" == "success" && "${{ needs.publish-catalog.result }}" == "success" && "${{ needs.publish-portal.result }}" == "success" ]]; then
             echo "## Production deployment completed successfully!" >> $GITHUB_STEP_SUMMARY
           else
             echo "## Production deployment failed" >> $GITHUB_STEP_SUMMARY

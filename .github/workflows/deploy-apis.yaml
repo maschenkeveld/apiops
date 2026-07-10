@@ -1,18 +1,13 @@
 name: Kong Deploy
-# Reusable workflow: for each API in apps_list, generates a full Kong deck config from the
-# OpenAPI spec and syncs it to Konnect. All apps are processed in parallel via a matrix.
+# Reusable workflow: for each API in apps_list, backs up the control plane and then syncs the
+# API's deck config to Konnect. The deck config is NOT regenerated here — it is downloaded from
+# the deck-<app> artifact produced once by generate-deck.yaml, so the deployed config is identical
+# to the one that was linted.
 #
-# Config build pipeline per app (executed in a single job):
-#   openapi-spec.yaml
-#     → redocly bundle       (resolve $refs)
-#     → deck openapi2kong    (generate base Kong config)
-#     → deck file merge      (add custom entities from additions.yaml)
-#     → deck file add-plugins (attach plugins using templates from shared/plugin-templates/)
-#     → deck file patch (shared)  (set route hosts from DECK_DATAPLANE_HOSTNAME env var)
-#     → deck file patch (api)     (set service backend from DECK_SERVICE_BACKEND_* env vars)
-#     → deck file add-tags   (tag with api name and major version for scoped syncing)
-#     → deck file namespace  (prefix all route paths with /<api>/<version>)
-#     → deck gateway sync    (write to Konnect, scoped by --select-tag)
+# Apps deploy STRICTLY SEQUENTIALLY (max-parallel: 1). Concurrent gateway syncs against the same
+# control plane can race, so each app runs to completion before the next starts. Per app the
+# sequence is: backup → diff → sync. The backup runs immediately before that app's write so there
+# is always a fresh restore point.
 
 on:
   workflow_call:
@@ -73,7 +68,9 @@ jobs:
     needs: setup-environment
     runs-on: ubuntu-latest
     strategy:
-      # All apps are deployed in parallel. Each is scoped with --select-tag so they don't interfere.
+      # Deploy apps one at a time. Concurrent gateway syncs against the same control plane can
+      # race; --select-tag scopes the writes but serializing removes the race entirely.
+      max-parallel: 1
       matrix: ${{ fromJson(needs.setup-environment.outputs.apps_matrix) }}
     env:
       CONTROL_PLANE_NAME: ${{ needs.setup-environment.outputs.control_plane_name }}
@@ -81,19 +78,32 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v7
 
-      - name: Build Kong Config
-        # Shared composite action: bundle → openapi2kong → merge/add-plugins/patch/add-tags/namespace.
-        # Same build used by lint-deck.yaml so the linted and deployed config are identical.
-        uses: ./.github/actions/build-kong-config
-        with:
-          app: ${{ matrix.app }}
+      - name: Install deck
+        # Download the official deck release (linux/amd64).
+        run: |
+          DECK_VERSION=1.49.1
+          curl -sL "https://github.com/Kong/deck/releases/download/v${DECK_VERSION}/deck_${DECK_VERSION}_linux_amd64.tar.gz" -o deck.tar.gz
+          sudo tar -xzf deck.tar.gz -C /usr/local/bin deck
+          sudo chmod +x /usr/local/bin/deck
 
-      - name: Upload Kong Plugined and Patched Config
-        # Upload as an artifact for debugging and audit purposes.
-        uses: actions/upload-artifact@v7
+      - name: Install yq
+        # deploy.sh derives the major-version tag with yq.
+        run: |
+          sudo wget https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64 -O /usr/local/bin/yq
+          sudo chmod +x /usr/local/bin/yq
+
+      - name: Download generated deck artifact
+        # Consume the deck config generated once by generate-deck.yaml — no regeneration here.
+        # Reconstructs the generated deck file and the bundled OAS under apis/<app>.
+        uses: actions/download-artifact@v7
         with:
-          name: kong-plugined-and-patched-${{ matrix.app }}.yaml
-          path: apis/${{ matrix.app }}/deck-file/generated/kong-plugined-and-patched.yaml
+          name: deck-${{ matrix.app }}
+          path: apis/${{ matrix.app }}
+
+      - name: Backup control plane
+        # Fresh restore point immediately before this app's write. Shared script — same one the
+        # local runner uses (make backup).
+        run: ./scripts/backup.sh ${{ env.CONTROL_PLANE_NAME }} ${{ inputs.environment }}
 
       - name: Deploy to Kong (diff + sync)
         # Shared script — same one the local runner uses (make deploy). Sources env-vars,

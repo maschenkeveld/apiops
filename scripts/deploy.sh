@@ -10,7 +10,7 @@ CP="${2:?usage: deploy.sh <app> <control-plane>}"
 require_env KONNECT_TOKEN
 
 FILE="apis/$APP/deck-file/generated/kong-plugined-and-patched.yaml"
-[ -f "$FILE" ] || die "built config missing — run build.sh first: $FILE"
+[ -f "$FILE" ] || die "built config missing — run generate.sh first: $FILE"
 
 load_env "$CP" "$APP"
 export DECK_API_NAME="$APP"

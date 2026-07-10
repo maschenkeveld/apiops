@@ -1,14 +1,14 @@
 #!/usr/bin/env bash
-# Build the Kong deck file for one API: bundle -> openapi2kong -> merge/add-plugins/
-# patch/add-tags/namespace. Single source of truth for the deck build, shared by the
-# local runner and the build-kong-config composite action in CI.
+# Generate the Kong deck file for one API: bundle -> openapi2kong -> merge/add-plugins/
+# patch/add-tags/namespace. Single source of truth for deck generation, shared by the
+# local runner and the generate-kong-config composite action in CI.
 #
 # Env vars are intentionally NOT sourced here: the patches use deck's
 # `${{ env "DECK_*" }}` templating, which is resolved later at `deck gateway sync`.
 source "$(dirname "$0")/lib.sh"
 
-APP="${1:?usage: build.sh <app>}"
-log "Build deck config: $APP"
+APP="${1:?usage: generate.sh <app>}"
+log "Generate deck config: $APP"
 
 redocly bundle "apis/$APP/openapi-spec/openapi-spec.yaml" \
   -o "apis/$APP/openapi-spec/openapi-spec-bundled.yaml"
@@ -27,4 +27,4 @@ deck file merge "apis/$APP/deck-file/generated/kong-generated.yaml" "apis/$APP/a
   | deck file namespace --path-prefix="/$APP/$VER" \
   > "apis/$APP/deck-file/generated/kong-plugined-and-patched.yaml"
 
-ok "Built apis/$APP/deck-file/generated/kong-plugined-and-patched.yaml ($VER)"
+ok "Generated apis/$APP/deck-file/generated/kong-plugined-and-patched.yaml ($VER)"

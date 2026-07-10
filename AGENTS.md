@@ -28,8 +28,8 @@ changes), `kongctl` (catalog/portal sync), `yq`+`jq`. Two **blocking** lint gate
 
 ```bash
 cd scripts && make image
-make validate build lint APP=<api>   # OAS lint + build + deck lint, no Konnect
-make dry-run APPS="<api>"            # full flow, diff only (read-only)
+make validate generate lint APP=<api>   # OAS lint + generate + deck lint, no Konnect
+make dry-run APPS="<api>"                # full flow, diff only (read-only)
 ```
 
 Prefer `make dry-run` / `deck gateway diff` — never `sync` — when inspecting locally.
@@ -38,7 +38,7 @@ Prefer `make dry-run` / `deck gateway diff` — never `sync` — when inspecting
 
 - **Never run `deck gateway sync`, `scripts/deploy*.sh`, `scripts/publish-api.sh`**, or anything
   that writes to Konnect unless explicitly asked. `diff`, `dump`, `ping`, `lint`, `validate`,
-  `build` are safe.
+  `generate` are safe.
 - **Never commit** tokens (keep `TOKEN=`/env placeholders blank) or build artifacts
   (`deck-file/generated/`, `deck-file/dumped/`, `openapi-spec-bundled*`, `backups/*.yaml` are
   git-ignored).
@@ -72,15 +72,23 @@ Prefer `make dry-run` / `deck gateway diff` — never `sync` — when inspecting
   | Script | Called by |
   |---|---|
   | `validate.sh` | `validate-apis.yaml` |
-  | `build.sh` | `build-kong-config` action (used by `deploy-apis.yaml` + `lint-deck.yaml`) |
+  | `generate.sh` | `generate-kong-config` action (used by `generate-deck.yaml`) |
   | `lint.sh` | `lint-deck.yaml` (per-API) |
   | `lint-global.sh` | `lint-deck.yaml` (global files) |
-  | `backup.sh` | `backup-kong-control-plane.yaml` |
+  | `backup.sh` | `deploy-apis.yaml` (before each app) + `deploy-global-components.yaml` (before global sync) |
   | `deploy-global.sh` | `deploy-global-components.yaml` |
   | `deploy.sh` | `deploy-apis.yaml` |
   | `verify.sh` | `verify-deployment.yaml` |
   | `publish-api.sh` | `publish-to-catalog.yaml` (catalog) + `publish-to-portal.yaml` (portal) |
 
+- **Per-API sequence** (enforced by chained stages in every trigger): Validate OAS → Generate Deck
+  → Lint Deck → (Global first) → Backup → Diff → Sync → Publish Catalog → Publish Portal. The deck
+  is **generated exactly once** in `generate-deck.yaml` and uploaded as the `deck-<app>` artifact;
+  `lint-deck.yaml` and `deploy-apis.yaml` **download** that artifact — never regenerate — so linted
+  and deployed config are byte-identical.
+- Global components deploy **before** APIs (APIs reference consumer groups + partials). API deploys
+  run **sequentially** (`max-parallel: 1`) to avoid gateway-sync races; there is no standalone backup
+  workflow — backup runs inside each deploy stage right before it writes.
 - App lists are hard-coded per trigger (`ALL_APPS` in main, `PRODUCTION_APPS` in release) and can
   drift from `apis/` folders — a folder isn't deployed until it's in the list.
 - Deploy jobs are chained on `success` with `deck-lint` gating before any write; gateway writes

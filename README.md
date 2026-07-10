@@ -13,7 +13,7 @@ Actions workflows just call them** — so CI and local runs are identical.
 1. Trigger workflows   trigger-pr / trigger-main / trigger-release   (bind to git events)
         │                 no tool logic — they call reusable workflows
         ▼
-2. Reusable workflows  validate-apis, lint-deck, deploy-apis, …      (matrix, secrets, artifacts)
+2. Reusable workflows  validate-apis, generate-deck, lint-deck, deploy-apis, …  (matrix, secrets, artifacts)
         │                 each does:  run: ./scripts/<step>.sh
         ▼
 3. Scripts             scripts/*.sh                                  (the real work; run locally too)
@@ -25,9 +25,14 @@ Example: `trigger-main` → `uses: deploy-apis.yaml` → `run: ./scripts/deploy.
 
 | Trigger | Fires on | Does |
 |---|---|---|
-| `trigger-pr` | PR to `main` | validate (OpenAPI lint + semver/breaking) + deck-lint. No deploy. |
-| `trigger-main` | push to `main` | validate → deck-lint → backup → deploy globals → **deploy to `apiops-development`** → verify → publish to catalog + dev portal |
+| `trigger-pr` | PR to `main` | validate (OpenAPI lint + semver/breaking) → generate deck → deck-lint. No deploy. |
+| `trigger-main` | push to `main` | validate → generate deck (once) → deck-lint → deploy globals → **deploy to `apiops-development`** → verify → publish to catalog + dev portal |
 | `trigger-release` | push to `production` branch | same pipeline against **`apiops-production`**, then publish to catalog + dev portal |
+
+The deck config is **generated once** per API (`generate-deck.yaml`, uploaded as the `deck-<app>`
+artifact); deck-lint and deploy download that artifact rather than regenerating. Global components
+deploy **before** APIs, API deploys run **sequentially**, and each deploy stage **backs up** the
+control plane immediately before it writes.
 
 ### Promoting to production
 
@@ -46,7 +51,7 @@ apis/<name>/     openapi-spec, plugins, additions, patches, env-vars/, md-files/
 global/          shared Konnect entities (consumers, consumer groups, plugins, redis)
 shared/          plugin-templates, patches, openapi-spec components, .spectral.yaml, deck-linting/
 scripts/         all pipeline logic + Docker runner (see scripts/README.md); old/ = superseded
-.github/         workflows (thin wrappers) + actions/build-kong-config (→ scripts/build.sh)
+.github/         workflows (thin wrappers) + actions/generate-kong-config (→ scripts/generate.sh)
 ```
 
 ## Add a new API
@@ -69,7 +74,7 @@ scripts/         all pipeline logic + Docker runner (see scripts/README.md); old
 2. Add the name to the app lists in `trigger-main.yaml` (`ALL_APPS`) and `trigger-release.yaml`
    (`PRODUCTION_APPS`). A folder isn't deployed until it's in the list.
 
-3. Validate locally: `cd scripts && make validate build lint APP=<name>`.
+3. Validate locally: `cd scripts && make validate generate lint APP=<name>`.
 
 > `changelog.md`'s last entry must match the spec's `info.version`; a changed spec must bump
 > semver; breaking changes must be registered in `breaking-changes.yaml`. All three are enforced
@@ -112,7 +117,7 @@ Everything runs in a pinned Docker image (native on Apple Silicon), using the sa
 cd scripts && cp .env.example .env   # add KONNECT_TOKEN
 make image                           # build the tooling image once
 
-make validate build lint APP=alice   # offline — no Konnect needed
+make validate generate lint APP=alice   # offline — no Konnect needed
 make deploy APP=alice                # diff + sync alice to apiops-development
 make demo APPS="alice bob"           # full end-to-end (validate → deploy → verify → publish)
 make dry-run APPS="alice bob"        # same but diff-only, no writes
