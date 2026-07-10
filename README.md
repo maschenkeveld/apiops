@@ -34,6 +34,34 @@ artifact); deck-lint and deploy download that artifact rather than regenerating.
 deploy **before** APIs, API deploys run **sequentially**, and each deploy stage **backs up** the
 control plane immediately before it writes.
 
+### Pipeline at a glance
+
+Every trigger runs the same stages, chained so each only starts if the previous **succeeded**. The
+prepare stages fan out across APIs in parallel (no Konnect writes); the deploy stages are serialized
+to keep writes race-free.
+
+```
+Prepare  (parallel across APIs, no Konnect writes)
+  1. Validate OAS    spectral lint · semver · breaking changes      validate-apis.yaml
+  2. Generate Deck   spec → Kong config, built ONCE per API and     generate-deck.yaml
+                     uploaded as the deck-<app> artifact
+  3. Lint Deck       deck file lint — downloads the artifact        lint-deck.yaml
+        │
+        ▼
+Deploy   (sequential, writes to Konnect)
+  4. Global first    backup → consumer-groups → consumers →         deploy-global-components.yaml
+                     plugins → redis   (max-parallel 1)
+  5. Deploy APIs     per API (max-parallel 1): backup → diff →      deploy-apis.yaml
+                     sync — downloads the artifact
+        │
+        ▼
+  6. Verify          ping the control plane                         verify-deployment.yaml
+  7. Publish Catalog → API Catalog                                  publish-to-catalog.yaml
+  8. Publish Portal  → Developer Portal                             publish-to-portal.yaml
+```
+
+On a **PR to `main`**, only the prepare stages run (validate → generate → lint) — no deploy.
+
 ### Promoting to production
 
 There is no separate release branch or version tag. Promote by merging `main` into `production`:
@@ -106,8 +134,20 @@ runtime — no hardcoded UUIDs anywhere.
 
 `global/` holds shared Konnect entities that apply across all APIs: consumer groups, consumers,
 Redis config, and global plugins. These are deployed via `deploy-global-components.yaml`, called
-before the per-API deploy in both flows. On production, `force_deploy: true` ensures they always
-sync — even if no `global/` files changed — to bootstrap a fresh control plane cleanly.
+before the per-API deploy in both flows (APIs reference these entities — e.g. alice's
+rate-limiting-advanced plugin references the `shared-redis` partial **by name**, resolved via
+`_info.default_lookup_tags`, so the partial can be recreated without editing referrers).
+
+On a normal push, global components only sync when files under `global/` change. Two ways to force
+a full sync — needed to **bootstrap a fresh or reset control plane**:
+
+- **Production** always forces it (`force_deploy: true` in `trigger-release.yaml`).
+- **Development** exposes a manual switch: run *Deploy to Development* from the Actions tab
+  (`workflow_dispatch`) with **`force_global: true`**.
+
+> After a `deck gateway reset`, the control plane is empty. A plain API push then **skips** the
+> global stage (no `global/` diff), and API deploys fail on the missing consumer groups / partials.
+> Bootstrap with the dev `force_global` dispatch (or a `global/` change) first.
 
 ## Run locally
 
