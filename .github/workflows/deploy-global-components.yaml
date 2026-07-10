@@ -64,9 +64,33 @@ jobs:
             exit 1
           fi
 
+  backup:
+    name: Backup Control Plane
+    needs: [has-changes, generate-matrix]
+    runs-on: ubuntu-latest
+    # Only back up when we're actually going to deploy — mirrors the deploy-components gate.
+    if: needs.has-changes.outputs.are-changes == 'true' || inputs.force_deploy == true
+    env:
+      CONTROL_PLANE_NAME: ${{ needs.generate-matrix.outputs.control_plane_name }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Install deck
+        # Download the official deck release (linux/amd64).
+        run: |
+          DECK_VERSION=1.49.1
+          curl -sL "https://github.com/Kong/deck/releases/download/v${DECK_VERSION}/deck_${DECK_VERSION}_linux_amd64.tar.gz" -o deck.tar.gz
+          sudo tar -xzf deck.tar.gz -C /usr/local/bin deck
+          sudo chmod +x /usr/local/bin/deck
+
+      - name: Backup control plane
+        # Fresh restore point before the global sync. Shared script — same one the local runner uses.
+        run: ./scripts/backup.sh "${{ env.CONTROL_PLANE_NAME }}" "${{ inputs.environment }}"
+
   deploy-components:
     name: Deploy Global Components
-    needs: [has-changes, generate-matrix]
+    needs: [has-changes, generate-matrix, backup]
     runs-on: ubuntu-latest
     if: needs.has-changes.outputs.are-changes == 'true' || inputs.force_deploy == true
     strategy:
@@ -96,7 +120,7 @@ jobs:
 
   deployment-summary:
     name: Summary
-    needs: [has-changes, generate-matrix, deploy-components]
+    needs: [has-changes, generate-matrix, backup, deploy-components]
     runs-on: ubuntu-latest
     if: always()
     steps:

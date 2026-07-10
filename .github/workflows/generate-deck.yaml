@@ -1,0 +1,78 @@
+name: Generate Deck Config
+# Reusable workflow: generates each API's Kong deck config from its OpenAPI spec exactly ONCE
+# and uploads it as an artifact (deck-<app>). Downstream stages — lint-deck and deploy-apis —
+# consume that artifact instead of regenerating, so the linted config and the deployed config
+# are guaranteed byte-identical.
+#
+# Generation is env-agnostic: the patches use deck's ${{ env "DECK_*" }} templating, resolved
+# later at `deck gateway sync`. So one generated artifact serves lint + every environment.
+#
+# Apps are generated in parallel (matrix, no max-parallel) — generation is read-only and never
+# touches Konnect, so there are no race conditions to serialize here.
+
+on:
+  workflow_call:
+    inputs:
+      apps_list:
+        description: 'Space-separated list of apps to generate'
+        required: true
+        type: string
+
+jobs:
+  setup:
+    name: Setup Generate Matrix
+    runs-on: ubuntu-latest
+    outputs:
+      apps_matrix: ${{ steps.generate-matrix.outputs.apps_matrix }}
+    steps:
+      - name: Generate apps matrix
+        id: generate-matrix
+        run: |
+          apps_array=$(echo "${{ inputs.apps_list }}" | tr ' ' '\n' | jq -R . | jq -s -c .)
+          echo "apps_matrix={\"app\":$apps_array}" >> $GITHUB_OUTPUT
+
+  generate-app:
+    name: Generate Deck Config
+    needs: setup
+    runs-on: ubuntu-latest
+    strategy:
+      # All apps generate in parallel — generation is offline and read-only.
+      matrix: ${{ fromJson(needs.setup.outputs.apps_matrix) }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+
+      - name: Generate Kong Config
+        # Shared composite action: bundle → openapi2kong → merge/add-plugins/patch/add-tags/namespace.
+        uses: ./.github/actions/generate-kong-config
+        with:
+          app: ${{ matrix.app }}
+
+      - name: Upload generated deck artifact
+        # The single source of truth for this run. lint-deck and deploy-apis download this exact
+        # artifact — the deck is never regenerated downstream. Includes the bundled OAS because
+        # deploy.sh feeds it to the DECK_OAS_SPEC_JSON patch var at sync time.
+        uses: actions/upload-artifact@v7
+        with:
+          name: deck-${{ matrix.app }}
+          path: |
+            apis/${{ matrix.app }}/deck-file/generated/kong-plugined-and-patched.yaml
+            apis/${{ matrix.app }}/openapi-spec/openapi-spec-bundled.yaml
+          retention-days: 1
+          if-no-files-found: error
+
+  summary:
+    name: Summary
+    needs: [setup, generate-app]
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Create generate summary
+        run: |
+          echo "# Deck Config Generation Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Apps:** ${{ inputs.apps_list }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Check | Status |" >> $GITHUB_STEP_SUMMARY
+          echo "|-------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Generate Deck | ${{ needs.generate-app.result == 'success' && '✅ Passed' || needs.generate-app.result == 'skipped' && '⏭️ Skipped' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY

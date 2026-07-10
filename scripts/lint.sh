@@ -5,7 +5,7 @@ source "$(dirname "$0")/lib.sh"
 
 APP="${1:?usage: lint.sh <app>}"
 FILE="apis/$APP/deck-file/generated/kong-plugined-and-patched.yaml"
-[ -f "$FILE" ] || die "built config missing — run build.sh first: $FILE"
+[ -f "$FILE" ] || die "built config missing — run generate.sh first: $FILE"
 
 log "Lint deck config: $APP"
 deck file lint shared/deck-linting/ruleset.yaml --state "$FILE" --fail-severity error

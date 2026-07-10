@@ -16,7 +16,7 @@ HERE="$(cd "$(dirname "$0")" && pwd)"
 for APP in "$@"; do
   printf '\n\033[1;35m===== %s =====\033[0m\n' "$APP"
   "$HERE/validate.sh" "$APP"
-  "$HERE/build.sh" "$APP"
+  "$HERE/generate.sh" "$APP"
   "$HERE/lint.sh" "$APP"
   "$HERE/deploy.sh" "$APP" "$CP"
 done
