@@ -9,6 +9,13 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
+    inputs:
+      force_global:
+        description: 'Deploy global components even with no global/ changes (bootstrap a reset control plane)'
+        required: false
+        type: boolean
+        default: false
 
 permissions:
   actions: read
@@ -69,6 +76,9 @@ jobs:
     uses: ./.github/workflows/deploy-global-components.yaml
     with:
       environment: development
+      # On a normal push, global only deploys when global/ changes. A manual dispatch with
+      # force_global: true deploys it regardless — used to bootstrap a freshly reset control plane.
+      force_deploy: ${{ inputs.force_global == true }}
     secrets:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
