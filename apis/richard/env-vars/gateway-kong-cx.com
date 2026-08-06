@@ -1,0 +1,2 @@
+export DECK_SERVICE_BACKEND_HOSTNAME=richard.test-mesh-richard.svc.cluster.local
+export DECK_SERVICE_BACKEND_PORT=8080

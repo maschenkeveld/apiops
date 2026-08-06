@@ -1,0 +1,157 @@
+openapi: 3.0.0
+info:
+  title: victor
+  version: 1.0.0
+  description: This API provides endpoints for metrics, health, identity, and crawling services. Oh yeah.
+  contact:
+    name: API Support
+    email: support@example.com
+    url: https://example.com/support
+
+servers:
+  - url: https://placeholder.com/victor/v1
+
+components:
+  securitySchemes:
+    ApiKeyAuth:
+      type: apiKey
+      in: header
+      name: apikey
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+    OAuth2:
+      type: oauth2
+      flows:
+        clientCredentials:
+          tokenUrl: https://idp.example.com/realms/kong/protocol/openid-connect/token
+          scopes: 
+            openid: OpenID
+            profile: Profile
+
+  schemas:
+    Upstream:
+      type: object
+      properties:
+        host:
+          type: string
+        upstreams:
+          type: array
+          items:
+            $ref: '#/components/schemas/Upstream'
+
+    CrawlResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        name:
+          type: string
+        zone:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        incomingHeaders:
+          type: object
+          additionalProperties:
+            type: string
+        upstreamResponses:
+          type: array
+          items:
+            $ref: '#/components/schemas/CrawlResponse'
+
+    IdentifyResponse:
+      type: object
+      properties:
+        statusCode:
+          type: integer
+        name:
+          type: string
+        zone:
+          type: string
+        reason:
+          type: string
+          nullable: true
+        incomingHeaders:
+          type: object
+          additionalProperties:
+            type: string
+
+    HealthResponse:
+      type: object
+      properties:
+        status:
+          type: string
+
+paths:
+  /metrics:
+    get:
+      summary: Get metrics
+      description: Returns various performance and usage metrics collected by the service.
+      operationId: getMetrics
+      tags:
+        - Metrics
+      responses:
+        '200':
+          description: Successful response
+
+  /health:
+    get:
+      summary: Health Endpoint
+      description: Returns health status of the API service indicating system availability.
+      operationId: getHealth
+      tags:
+        - Health
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponse'
+
+  /identify:
+    get:
+      summary: Identify Endpoint
+      description: Identifies the calling system based on provided credentials and headers.
+      operationId: getIdentify
+      tags:
+        - Identity
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/IdentifyResponse'
+
+  /crawl:
+    post:
+      summary: Crawl Endpoint
+      description: Accepts upstream services and performs a crawl to retrieve responses from them.
+      operationId: postCrawl
+      tags:
+        - Crawler
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - upstreams
+              properties:
+                upstreams:
+                  type: array
+                  items:
+                    $ref: '#/components/schemas/Upstream'
+              additionalProperties: false
+      responses:
+        '200':
+          description: Successful response
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CrawlResponse'

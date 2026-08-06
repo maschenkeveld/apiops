@@ -1,0 +1,12 @@
+---
+_format_version: '1.0'
+add-plugins:
+- selectors:
+  - "$..services[*]"
+  overwrite: false
+  plugins:
+    - name: oas-validation
+      _config: shared-oas-validation
+      config:
+        api_spec: |
+           ${{ env "DECK_OAS_SPEC_JSON" }}
