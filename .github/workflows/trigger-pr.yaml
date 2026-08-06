@@ -26,7 +26,7 @@ jobs:
         run: |
           # Space-separated list of all APIs to validate on every PR.
           # Each name must correspond to a folder under apis/.
-          ALL_APPS="alice bob"
+          ALL_APPS="alice bob charlie heidi richard ted rupert eddy ivan luke mike pat victor"
           echo "all-apps-list=$ALL_APPS" >> $GITHUB_OUTPUT
           echo "PR validation apps list: $ALL_APPS"
 
