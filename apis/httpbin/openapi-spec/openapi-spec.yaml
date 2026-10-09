@@ -5,21 +5,14 @@ info:
   version: '1.0'
 servers:
   - url: >-
-      https://will-be-updated-in-the-pipeline.com
+      https://cedebe91bc.aws-eu-central-1.edge.gateways.konggateway.com/
 components:
   securitySchemes:
     ApiKeyAuth:
       type: apiKey
       in: header
       name: apikey
-    OAuth2:
-      type: oauth2
-      flows:
-        clientCredentials:
-          tokenUrl: https://idp.example.com/realms/kong/protocol/openid-connect/token
-          scopes: 
-            openid: OpenID
-            profile: Profile
+
 security:
   - ApiKeyAuth: []
 paths:
