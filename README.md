@@ -26,8 +26,8 @@ Example: `trigger-main` → `uses: deploy-apis.yaml` → `run: ./scripts/deploy.
 | Trigger | Fires on | Does |
 |---|---|---|
 | `trigger-pr` | PR to `main` | validate (OpenAPI lint + semver/breaking) → generate deck → deck-lint. No deploy. |
-| `trigger-main` | push to `main` | validate → generate deck (once) → deck-lint → deploy globals → **deploy to `apiops-development`** → verify → publish to catalog + dev portal |
-| `trigger-release` | push to `production` branch | same pipeline against **`apiops-production`**, then publish to catalog + dev portal |
+| `trigger-main` | push to `main` | validate → generate deck (once) → deck-lint → deploy globals → **deploy to `ko-dp-shared-2`** (first target) → verify → publish to the catalog (and the portal, if the API enables it) |
+| `trigger-release` | push to `production` branch | same pipeline against **`ko-dp-shared-3`** (second target), then publish to the catalog (and the portal, if enabled) |
 
 The deck config is **generated once** per API (`generate-deck.yaml`, uploaded as the `deck-<app>`
 artifact); deck-lint and deploy download that artifact rather than regenerating. Global components
@@ -92,8 +92,8 @@ scripts/         all pipeline logic + Docker runner (see scripts/README.md); old
    | `plugins/plugins.yaml` | Kong plugins (uses templates from `shared/plugin-templates/`) |
    | `patches/deck.yaml` | Deck patches (e.g. override route hosts) |
    | `additions/additions.yaml` | Extra Kong entities not derivable from the spec |
-   | `env-vars/apiops-development` | `DECK_SERVICE_BACKEND_HOSTNAME` + `DECK_SERVICE_BACKEND_PORT` for dev |
-   | `env-vars/apiops-production` | Same, for production |
+   | `env-vars/ko-dp-shared-2` | `DECK_SERVICE_BACKEND_HOSTNAME` + `DECK_SERVICE_BACKEND_PORT` for the first target |
+   | `env-vars/ko-dp-shared-3` | Same, for the second target |
    | `changelog.md` | Start with `1.0.0: "Initial version"` — version must match the spec |
    | `breaking-changes.yaml` | Register any breaking changes here (enforced by `validate.sh`) |
    | `md-files/` | Optional Markdown docs published to the Dev Portal |
@@ -115,17 +115,17 @@ are inferred from the flags — no IDs to manage:
 
 ```yaml
 catalog: true       # publish to the Konnect API Catalog
-portal: true        # publish to the Konnect Developer Portal
-development: true   # include the development environment (apiops-development CP, apiops-developer-portal)
-production: true    # include the production environment  (apiops-production CP,  apiops-production-portal)
+portal: false       # publish to the Konnect Developer Portal (off here: portals are managed separately)
+shared-2: true      # include the first target  (ko-dp-shared-2 CP)
+shared-3: true      # include the second target (ko-dp-shared-3 CP)
 ```
 
 Inferred conventions:
 
 | Flag | Control plane | Portal | Catalog entry name |
 |---|---|---|---|
-| `development: true` | `apiops-development` | `apiops-developer-portal` | `{app}-dev` |
-| `production: true` | `apiops-production` | `apiops-production-portal` | `{app}` |
+| `shared-2: true` | `ko-dp-shared-2` | `apiops-developer-portal` (only if `portal: true`) | `{app}-shared-2` |
+| `shared-3: true` | `ko-dp-shared-3` | `apiops-production-portal` (only if `portal: true`) | `{app}-shared-3` |
 
 The service name in every gateway is always the app folder name. All IDs are resolved by name at
 runtime — no hardcoded UUIDs anywhere.
@@ -158,7 +158,7 @@ cd scripts && cp .env.example .env   # add KONNECT_TOKEN
 make image                           # build the tooling image once
 
 make validate generate lint APP=alice   # offline — no Konnect needed
-make deploy APP=alice                # diff + sync alice to apiops-development
+make deploy APP=alice                # diff + sync alice to ko-dp-shared-2
 make demo APPS="alice bob"           # full end-to-end (validate → deploy → verify → publish)
 make dry-run APPS="alice bob"        # same but diff-only, no writes
 ```
@@ -181,8 +181,10 @@ runners — no secrets backend, no self-hosted runner required.
 ## Relationship to PlatformOps
 
 [PlatformOps](../platformops/) provisions the infrastructure with Terraform: the
-`konnect-eu-apiops-{development,production}` stacks each create a control plane and a portal.
-APIOps deploys config into what PlatformOps created. The contract between them is by **name** —
-control planes `apiops-development` / `apiops-production` match the `env-vars/<name>` files, and
-portal names `apiops-developer-portal` / `apiops-production-portal` are resolved by `publish-api.sh`
-at runtime.
+[`konnect-eu-ko-dp-shared-2`](https://github.com/maschenkeveld/konnect-eu-ko-dp-shared-2) and
+[`konnect-eu-ko-dp-shared-3`](https://github.com/maschenkeveld/konnect-eu-ko-dp-shared-3) stacks each
+create one control plane (the Kong Operator data planes connect to them, see the
+[gitops](https://github.com/maschenkeveld/gitops) repo). APIOps deploys config into those control planes.
+The contract between them is by **name** — the control planes `ko-dp-shared-2` / `ko-dp-shared-3` match the
+`env-vars/<name>` files. Developer portals are out of scope here (`portal: false`); if you enable them, the
+portal names `apiops-developer-portal` / `apiops-production-portal` are resolved by `publish-api.sh` at runtime.

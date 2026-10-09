@@ -42,7 +42,7 @@ jobs:
       - name: Install deck
         # Download the official deck release (linux/amd64).
         run: |
-          DECK_VERSION=1.49.1
+          DECK_VERSION=1.57.0
           curl -sL "https://github.com/Kong/deck/releases/download/v${DECK_VERSION}/deck_${DECK_VERSION}_linux_amd64.tar.gz" -o deck.tar.gz
           sudo tar -xzf deck.tar.gz -C /usr/local/bin deck
           sudo chmod +x /usr/local/bin/deck
@@ -69,7 +69,7 @@ jobs:
       - name: Install deck
         # Download the official deck release (linux/amd64).
         run: |
-          DECK_VERSION=1.49.1
+          DECK_VERSION=1.57.0
           curl -sL "https://github.com/Kong/deck/releases/download/v${DECK_VERSION}/deck_${DECK_VERSION}_linux_amd64.tar.gz" -o deck.tar.gz
           sudo tar -xzf deck.tar.gz -C /usr/local/bin deck
           sudo chmod +x /usr/local/bin/deck
@@ -77,6 +77,11 @@ jobs:
       - name: Lint global deck files
         # Shared script — same one the local runner uses (make lint-global).
         run: ./scripts/lint-global.sh
+
+      - name: Test the lint ruleset
+        # Proves the ruleset still blocks what it must (e.g. unapproved plugins) and accepts good config.
+        # Shared script — same one the local runner uses (make lint-test).
+        run: ./scripts/lint-test.sh
 
   summary:
     name: Summary

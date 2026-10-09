@@ -25,7 +25,7 @@ The `/crawl` endpoint makes bob reach out to one or more upstream services and r
 curl -s -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  https://kong-proxy-dp-konnect-eu-apiops-development.schenkeveld.io/bob/v1/crawl \
+  https://ko-dp-shared-2.pve-1.schenkeveld.io/bob/v1/crawl \
   -d '{
     "upstreams": [
       { "host": "http://alice/identify" }

@@ -7,7 +7,7 @@ on:
   workflow_call:
     inputs:
       environment:
-        description: 'Environment to deploy to (development, production)'
+        description: 'Environment to deploy to (shared-2, shared-3)'
         required: true
         type: string
       force_deploy:
@@ -54,13 +54,13 @@ jobs:
           # Maps the logical environment name to the Konnect control plane name.
           echo "Environment: ${{ inputs.environment }}"
 
-          if [[ "${{ inputs.environment }}" == "development" ]]; then
-            echo "control_plane_name=apiops-development" >> $GITHUB_OUTPUT
-          elif [[ "${{ inputs.environment }}" == "production" ]]; then
-            echo "control_plane_name=apiops-production" >> $GITHUB_OUTPUT
+          if [[ "${{ inputs.environment }}" == "shared-2" ]]; then
+            echo "control_plane_name=ko-dp-shared-2" >> $GITHUB_OUTPUT
+          elif [[ "${{ inputs.environment }}" == "shared-3" ]]; then
+            echo "control_plane_name=ko-dp-shared-3" >> $GITHUB_OUTPUT
           else
             echo "❌ Invalid environment: ${{ inputs.environment }}"
-            echo "Supported environments: development, production"
+            echo "Supported environments: shared-2, shared-3"
             exit 1
           fi
 

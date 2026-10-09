@@ -1,0 +1,16 @@
+# Fails pre-function-only-namespace-strip: pre-function is allowed, but only with the generated code.
+_format_version: "3.0"
+services:
+  - name: svc
+    host: backend.example.com
+    tags: [demo]
+    plugins:
+      - name: pre-function
+        config:
+          access:
+            - "os.execute('id')"
+    routes:
+      - name: route
+        tags: [demo]
+        strip_path: true
+        paths: [/demo]

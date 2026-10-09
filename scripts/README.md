@@ -36,7 +36,7 @@ make image                             # build the tooling image once
 | `make verify` | ping the control plane | yes |
 | `make shell` | shell inside the tooling image | no |
 
-Variables: `CP` (control plane, default `apiops-development`), `APP` (single app), `APPS`
+Variables: `CP` (control plane, default `ko-dp-shared-2`), `APP` (single app), `APPS`
 (space-separated list for `demo`/`dry-run`), `IMAGE`/`TAG`.
 
 ```bash
@@ -44,7 +44,7 @@ Variables: `CP` (control plane, default `apiops-development`), `APP` (single app
 make generate lint APP=alice
 
 # Full end-to-end demo against development
-make demo CP=apiops-development APPS="alice bob"
+make demo CP=ko-dp-shared-2 APPS="alice bob"
 ```
 
 ## How it maps to the pipeline

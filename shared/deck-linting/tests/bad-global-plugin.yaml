@@ -1,0 +1,4 @@
+# Fails allowed-plugins: ip-restriction is not on the allowlist (global level).
+_format_version: "3.0"
+plugins:
+  - name: ip-restriction

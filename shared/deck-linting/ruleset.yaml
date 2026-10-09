@@ -56,3 +56,73 @@ rules:
     then:
       field: name
       function: truthy
+
+  # ---------------------------------------------------------------------------
+  # Plugin allowlist (blocking)
+  #
+  # Only the plugins below may appear anywhere in a deck file: global, service, route,
+  # consumer or consumer-group level. Any other plugin fails the pipeline.
+  #
+  # To allow a new plugin: add it to the `match` regex below, add a passing case under
+  # shared/deck-linting/tests/, and get the change reviewed like any other policy change.
+  # ---------------------------------------------------------------------------
+  allowed-plugins:
+    description: >-
+      Plugin is not on the approved list (shared/deck-linting/ruleset.yaml, rule allowed-plugins).
+      Request approval by adding it to the allowlist in a reviewed change.
+    severity: error
+    given: $..plugins[*].name
+    then:
+      function: pattern
+      functionOptions:
+        # Anchored alternation of approved plugin names. (Uses `pattern` rather than `enumeration`
+        # because deck's `enumeration` is unreliable across versions: it crashed or silently passed
+        # on deck 1.49.1.) Keep the plugin names plain: letters, digits and dashes only.
+        match: "^(openid-connect|key-auth|acl|rate-limiting-advanced|cors|correlation-id|request-transformer|response-transformer|oas-validation|prometheus|pre-function)$"
+        # Plugins in the regex above, for reference:
+        #   openid-connect, key-auth, acl           authentication / authorization
+        #   rate-limiting-advanced                  traffic control
+        #   cors, correlation-id                    request hygiene
+        #   request-transformer, response-transformer, oas-validation
+        #   prometheus                              observability
+        #   pre-function                            INJECTED by `deck file namespace` (scripts/generate.sh)
+        #                                           to strip the API path prefix. It runs Lua, so it is
+        #                                           further restricted by the pre-function rules below.
+
+  # pre-function executes arbitrary Lua. The pipeline itself generates one (the namespace
+  # strip), so it must be allowed above - but ONLY with exactly that generated code.
+  pre-function-only-namespace-strip:
+    description: >-
+      pre-function is only allowed with the generated namespace-strip code. Custom Lua is not permitted.
+    severity: error
+    given: $..plugins[?(@.name=='pre-function')].config.access[*]
+    then:
+      function: pattern
+      functionOptions:
+        match: "^local ns='/[A-Za-z0-9_./-]+' -- this strips the '/[A-Za-z0-9_./-]+' namespace from the path\\nlocal nst=ns:sub\\(-1\\x2c-1\\)=='/' and ns or \\(ns\\.\\.'/'\\)\\nlocal function sn\\(u\\)\\n\\tlocal s\\x2ce=u:find\\(nst\\x2c1\\x2ctrue\\)\\n\\tif s then\\n\\t\\treturn u:sub\\(1\\x2cs\\)\\.\\.u:sub\\(e\\+1\\x2c-1\\)\\n\\tend\\n\\tif u:sub\\(-#ns\\x2c-1\\)==ns then\\n\\t\\tu=u:sub\\(1\\x2c-#ns-1\\)\\n\\t\\tif u=='' then u='/' end\\n\\tend\\n\\treturn u\\nend\\nngx\\.var\\.upstream_uri=sn\\(ngx\\.var\\.upstream_uri\\)$"
+
+  pre-function-access-phase-only:
+    description: pre-function may only use the access phase (no other phases, no extra code).
+    severity: error
+    given: $..plugins[?(@.name=='pre-function')].config
+    then:
+      function: schema
+      functionOptions:
+        schema:
+          type: object
+          required: [access]
+          additionalProperties: false
+          properties:
+            access:
+              type: array
+              minItems: 1
+              maxItems: 1
+
+  cors-no-wildcard-origin:
+    description: CORS should not allow every origin ("*").
+    severity: warn
+    given: $..plugins[?(@.name=='cors')].config.origins[*]
+    then:
+      function: pattern
+      functionOptions:
+        notMatch: "^\\*$"

@@ -17,9 +17,9 @@ die() { printf '\033[1;31m✗ %s\033[0m\n' "$*" >&2; exit 1; }
 # Map a logical environment to its Konnect control plane name.
 cp_for_env() {
   case "$1" in
-    development) echo "apiops-development" ;;
-    production)  echo "apiops-production" ;;
-    *) die "invalid environment: '$1' (expected development|production)" ;;
+    shared-2) echo "ko-dp-shared-2" ;;
+    shared-3) echo "ko-dp-shared-3" ;;
+    *) die "invalid environment: '$1' (expected shared-2|shared-3)" ;;
   esac
 }
 

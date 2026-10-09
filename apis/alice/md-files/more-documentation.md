@@ -27,7 +27,7 @@ Each node in the tree is fetched in parallel; the response from each node is emb
 curl -s -X POST \
   -H "Authorization: Bearer $TOKEN" \
   -H "Content-Type: application/json" \
-  https://kong-proxy-dp-konnect-eu-apiops-development.schenkeveld.io/alice/v1/crawl \
+  https://ko-dp-shared-2.pve-1.schenkeveld.io/alice/v1/crawl \
   -d '{
     "upstreams": [
       { "host": "http://bob/identify" }

@@ -1,5 +1,5 @@
 name: Deploy to Production
-# Deploys to the production Konnect control plane on every push to the production branch.
+# Deploys to the second target (ko-dp-shared-3) Konnect control plane on every push to the production branch.
 # Promote by merging main into production: git push origin main:production
 #
 # Jobs are chained so the per-API sequence is always enforced:
@@ -18,7 +18,7 @@ permissions:
   contents: read
 
 env:
-  ENVIRONMENT: production
+  ENVIRONMENT: shared-3
 
 jobs:
   setup:
@@ -57,7 +57,7 @@ jobs:
   deck-lint:
     name: Lint Deck Config
     needs: [setup, kong-generate]
-    # Step 3 — Blocking gate: lint the generated deck artifact before any write to production Konnect.
+    # Step 3 — Blocking gate: lint the generated deck artifact before any write to Konnect.
     if: needs.kong-generate.result == 'success'
     uses: ./.github/workflows/lint-deck.yaml
     with:
@@ -71,7 +71,7 @@ jobs:
     if: needs.deck-lint.result == 'success'
     uses: ./.github/workflows/deploy-global-components.yaml
     with:
-      environment: production
+      environment: shared-3
       force_deploy: true
     secrets:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
@@ -84,7 +84,7 @@ jobs:
     if: needs.kong-global.result == 'success'
     uses: ./.github/workflows/deploy-apis.yaml
     with:
-      environment: production
+      environment: shared-3
       apps_list: ${{ needs.setup.outputs.production-apps-list }}
     secrets:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
@@ -96,7 +96,7 @@ jobs:
     if: needs.kong-deploy.result == 'success'
     uses: ./.github/workflows/verify-deployment.yaml
     with:
-      environment: production
+      environment: shared-3
     secrets:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
@@ -138,7 +138,7 @@ jobs:
           echo "**Deployment Details:**" >> $GITHUB_STEP_SUMMARY
           echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- Environment: ${{ env.ENVIRONMENT }}" >> $GITHUB_STEP_SUMMARY
-          echo "- Control Plane: apiops-production" >> $GITHUB_STEP_SUMMARY
+          echo "- Control Plane: ko-dp-shared-3" >> $GITHUB_STEP_SUMMARY
           echo "- Deployment Time: $(date -u '+%Y-%m-%d %H:%M:%S UTC')" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 

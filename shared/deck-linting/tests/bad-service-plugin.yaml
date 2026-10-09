@@ -1,0 +1,13 @@
+# Fails allowed-plugins: request-termination is not on the allowlist (service level).
+_format_version: "3.0"
+services:
+  - name: svc
+    host: backend.example.com
+    tags: [demo]
+    plugins:
+      - name: request-termination
+    routes:
+      - name: route
+        tags: [demo]
+        strip_path: true
+        paths: [/demo]
