@@ -1,4 +1,4 @@
-name: Deploy to Development
+name: Deploy to First Target (ko-dp-shared-2)
 # Deploys to the first target (ko-dp-shared-2) Konnect control plane on every push to main.
 # Jobs are chained so the per-API sequence is always enforced:
 #   Validate OAS → Generate Deck (once) → Lint Deck → Global Components → Deploy APIs → Verify
@@ -83,7 +83,7 @@ jobs:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   kong-deploy:
-    name: Deploy to Development
+    name: Deploy to First Target (ko-dp-shared-2)
     needs: [setup-apps, kong-generate, kong-global]
     # Step 5 — Deploy APIs sequentially (max-parallel: 1). Each app: backup → diff → sync,
     # consuming the generated artifact. Runs only after global components succeed.

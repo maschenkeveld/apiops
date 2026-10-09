@@ -1,4 +1,4 @@
-name: Deploy to Production
+name: Deploy to Second Target (ko-dp-shared-3)
 # Deploys to the second target (ko-dp-shared-3) Konnect control plane on every push to the production branch.
 # Promote by merging main into production: git push origin main:production
 #
@@ -28,14 +28,14 @@ jobs:
       production-apps-list: ${{ steps.set-apps.outputs.production-apps-list }}
 
     steps:
-      - name: Set production apps list
+      - name: Set apps list
         id: set-apps
         run: |
           # Space-separated list of APIs to deploy to production.
           # Each name must correspond to a folder under apis/.
           PRODUCTION_APPS="alice bob"
           echo "production-apps-list=$PRODUCTION_APPS" >> $GITHUB_OUTPUT
-          echo "Production apps list: $PRODUCTION_APPS"
+          echo "Apps list: $PRODUCTION_APPS"
 
   kong-pipeline:
     name: Validate API Specs
@@ -64,7 +64,7 @@ jobs:
       apps_list: ${{ needs.setup.outputs.production-apps-list }}
 
   kong-global:
-    name: Deploy Global Components to Production
+    name: Deploy Global Components to Second Target (ko-dp-shared-3)
     needs: [setup, deck-lint]
     # Step 4 — Global components deploy FIRST. force_deploy bootstraps a fresh control plane
     # even with no global/ changes. This workflow backs up the control plane before syncing.
@@ -77,7 +77,7 @@ jobs:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 
   kong-deploy:
-    name: Deploy to Production
+    name: Deploy to Second Target (ko-dp-shared-3)
     needs: [setup, kong-generate, kong-global]
     # Step 5 — Deploy APIs sequentially (max-parallel: 1). Each app: backup → diff → sync,
     # consuming the generated artifact. Runs only after global components succeed.
@@ -133,7 +133,7 @@ jobs:
     steps:
       - name: Release deployment summary
         run: |
-          echo "# Production Deployment Summary" >> $GITHUB_STEP_SUMMARY
+          echo "# Second Target (ko-dp-shared-3) Deployment Summary" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**Deployment Details:**" >> $GITHUB_STEP_SUMMARY
           echo "- Commit: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
@@ -149,15 +149,15 @@ jobs:
           echo "| Generate Deck | ${{ needs.kong-generate.result == 'success' && '✅ Success' || '❌ Failed' }} | Deck config generated once per API |" >> $GITHUB_STEP_SUMMARY
           echo "| Deck Lint | ${{ needs.deck-lint.result == 'success' && '✅ Success' || '❌ Failed' }} | Deck config linting |" >> $GITHUB_STEP_SUMMARY
           echo "| Global Components | ${{ needs.kong-global.result == 'success' && '✅ Success' || '❌ Failed' }} | Backup + consumer groups, consumers, plugins |" >> $GITHUB_STEP_SUMMARY
-          echo "| Kong Deploy | ${{ needs.kong-deploy.result == 'success' && '✅ Success' || '❌ Failed' }} | Sequential API deployment to production (backup per app) |" >> $GITHUB_STEP_SUMMARY
-          echo "| Kong Verify | ${{ needs.kong-verify.result == 'success' && '✅ Success' || '❌ Failed' }} | Production deployment verification |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kong Deploy | ${{ needs.kong-deploy.result == 'success' && '✅ Success' || '❌ Failed' }} | Sequential API deployment to the second target (backup per app) |" >> $GITHUB_STEP_SUMMARY
+          echo "| Kong Verify | ${{ needs.kong-verify.result == 'success' && '✅ Success' || '❌ Failed' }} | Second target (ko-dp-shared-3) deployment verification |" >> $GITHUB_STEP_SUMMARY
           echo "| API Catalog | ${{ needs.publish-catalog.result == 'success' && '✅ Success' || '❌ Failed' }} | APIs published to the API Catalog |" >> $GITHUB_STEP_SUMMARY
           echo "| Developer Portal | ${{ needs.publish-portal.result == 'success' && '✅ Success' || '❌ Failed' }} | APIs published to the Developer Portal |" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
 
           if [[ "${{ needs.kong-pipeline.result }}" == "success" && "${{ needs.kong-generate.result }}" == "success" && "${{ needs.deck-lint.result }}" == "success" && "${{ needs.kong-global.result }}" == "success" && "${{ needs.kong-deploy.result }}" == "success" && "${{ needs.kong-verify.result }}" == "success" && "${{ needs.publish-catalog.result }}" == "success" && "${{ needs.publish-portal.result }}" == "success" ]]; then
-            echo "## Production deployment completed successfully!" >> $GITHUB_STEP_SUMMARY
+            echo "## Second target (ko-dp-shared-3) deployment completed successfully!" >> $GITHUB_STEP_SUMMARY
           else
-            echo "## Production deployment failed" >> $GITHUB_STEP_SUMMARY
+            echo "## Second target (ko-dp-shared-3) deployment failed" >> $GITHUB_STEP_SUMMARY
             echo "Check the logs for the failed pipeline stages above." >> $GITHUB_STEP_SUMMARY
           fi
