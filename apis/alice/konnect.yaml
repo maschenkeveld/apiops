@@ -1,4 +1,4 @@
 catalog: true
-portal: true
-development: true
-production: true
+portal: false
+shared-2: true
+shared-3: true

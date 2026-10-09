@@ -1,0 +1,42 @@
+# Passes: approved plugins at every level, plus the generated namespace-strip pre-function.
+_format_version: "3.0"
+plugins:
+  - name: prometheus
+services:
+  - name: svc
+    host: backend.example.com
+    tags: [demo]
+    plugins:
+      - name: openid-connect
+      - name: rate-limiting-advanced
+      - name: pre-function
+        config:
+          access:
+            - |-
+              local ns='/bob/v1' -- this strips the '/bob/v1' namespace from the path
+              local nst=ns:sub(-1,-1)=='/' and ns or (ns..'/')
+              local function sn(u)
+              	local s,e=u:find(nst,1,true)
+              	if s then
+              		return u:sub(1,s)..u:sub(e+1,-1)
+              	end
+              	if u:sub(-#ns,-1)==ns then
+              		u=u:sub(1,-#ns-1)
+              		if u=='' then u='/' end
+              	end
+              	return u
+              end
+              ngx.var.upstream_uri=sn(ngx.var.upstream_uri)
+    routes:
+      - name: route
+        tags: [demo]
+        strip_path: true
+        paths: [/demo]
+        plugins:
+          - name: cors
+            config:
+              origins: ["https://app.example.com"]
+consumers:
+  - username: demo
+    plugins:
+      - name: key-auth

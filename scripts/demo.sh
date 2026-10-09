@@ -9,7 +9,7 @@ source "$(dirname "$0")/lib.sh"
 
 CP="${1:?usage: demo.sh <control-plane> <app> [app...]}"
 shift
-[ "$#" -ge 1 ] || die "provide at least one app, e.g. demo.sh apiops-development alice"
+[ "$#" -ge 1 ] || die "provide at least one app, e.g. demo.sh ko-dp-shared-2 alice"
 
 HERE="$(cd "$(dirname "$0")" && pwd)"
 

@@ -1,5 +1,5 @@
 name: Deploy to Development
-# Deploys to the development Konnect control plane on every push to main.
+# Deploys to the first target (ko-dp-shared-2) Konnect control plane on every push to main.
 # Jobs are chained so the per-API sequence is always enforced:
 #   Validate OAS → Generate Deck (once) → Lint Deck → Global Components → Deploy APIs → Verify
 #   → Publish Catalog → Publish Portal
@@ -22,7 +22,7 @@ permissions:
   contents: read
 
 env:
-  ENVIRONMENT: development
+  ENVIRONMENT: shared-2
 
 jobs:
   setup-apps:
@@ -31,14 +31,14 @@ jobs:
     outputs:
       all-apps-list: ${{ steps.set-apps.outputs.all-apps-list }}
     steps:
-      - name: Set development apps list
+      - name: Set apps list
         id: set-apps
         run: |
           # Space-separated list of APIs to deploy on merge to main.
           # Each name must correspond to a folder under apis/.
           ALL_APPS="alice bob"
           echo "all-apps-list=$ALL_APPS" >> $GITHUB_OUTPUT
-          echo "Development apps list: $ALL_APPS"
+          echo "Apps list: $ALL_APPS"
 
   kong-pipeline:
     name: Validate API Specs
@@ -75,7 +75,7 @@ jobs:
     if: ${{ needs.deck-lint.result == 'success' }}
     uses: ./.github/workflows/deploy-global-components.yaml
     with:
-      environment: development
+      environment: shared-2
       # On a normal push, global only deploys when global/ changes. A manual dispatch with
       # force_global: true deploys it regardless — used to bootstrap a freshly reset control plane.
       force_deploy: ${{ inputs.force_global == true }}
@@ -90,7 +90,7 @@ jobs:
     if: ${{ needs.kong-global.result == 'success' }}
     uses: ./.github/workflows/deploy-apis.yaml
     with:
-      environment: development
+      environment: shared-2
       apps_list: ${{ needs.setup-apps.outputs.all-apps-list }}
     secrets:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
@@ -102,7 +102,7 @@ jobs:
     if: ${{ needs.kong-deploy.result == 'success' }}
     uses: ./.github/workflows/verify-deployment.yaml
     with:
-      environment: development
+      environment: shared-2
     secrets:
       KONNECT_TOKEN: ${{ secrets.KONNECT_TOKEN }}
 

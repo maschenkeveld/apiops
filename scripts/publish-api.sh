@@ -6,8 +6,8 @@
 # konnect.yaml format expected per app:
 #   catalog:     true   — enable catalog publication
 #   portal:      true   — enable dev portal publication (portal mode only)
-#   development: true   — publish to apiops-development / apiops-developer-portal
-#   production:  true   — publish to apiops-production  / apiops-production-portal
+#   shared-2:    true   — publish to ko-dp-shared-2 (first target)  / apiops-developer-portal
+#   shared-3:    true   — publish to ko-dp-shared-3 (second target) / apiops-production-portal
 #
 # PUBLISH_MODE:
 #   catalog  — sync catalog entries + spec + implementations (no portal publications)
@@ -96,16 +96,16 @@ for APP in $APPS_LIST; do
   log "Generating $YAML_OUT (mode: $PUBLISH_MODE)"
   printf '_defaults:\n  kongctl:\n    namespace: %s\n\napis:\n' "$APP" > "$YAML_OUT"
 
-  for ENV in development production; do
+  for ENV in shared-2 shared-3; do
     [ "$(kv "$ENV" "$CFG")" = "true" ] || continue
 
-    if [ "$ENV" = "development" ]; then
-      CATALOG_NAME="${APP}-dev"
-      CP_NAME="apiops-development"
+    if [ "$ENV" = "shared-2" ]; then
+      CATALOG_NAME="${APP}-shared-2"
+      CP_NAME="ko-dp-shared-2"
       PORTAL_NAME="apiops-developer-portal"
     else
-      CATALOG_NAME="${APP}"
-      CP_NAME="apiops-production"
+      CATALOG_NAME="${APP}-shared-3"
+      CP_NAME="ko-dp-shared-3"
       PORTAL_NAME="apiops-production-portal"
     fi
 

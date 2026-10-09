@@ -5,7 +5,7 @@ Bob is a demo microservice that exposes identity, health, crawl, and metrics end
 ## Base URL
 
 ```
-https://kong-proxy-dp-konnect-eu-apiops-development.schenkeveld.io/bob/v1
+https://ko-dp-shared-2.pve-1.schenkeveld.io/bob/v1
 ```
 
 ## Authentication
@@ -36,7 +36,7 @@ TOKEN=$(curl -s -X POST https://keycloak.schenkeveld.io/realms/kong/protocol/ope
   | jq -r .access_token)
 
 curl -H "Authorization: Bearer $TOKEN" \
-  https://kong-proxy-dp-konnect-eu-apiops-development.schenkeveld.io/bob/v1/identify
+  https://ko-dp-shared-2.pve-1.schenkeveld.io/bob/v1/identify
 ```
 
 ## Endpoints Overview

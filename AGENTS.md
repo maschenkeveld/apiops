@@ -12,11 +12,13 @@ that are thin wrappers calling those scripts (`run: ./scripts/<step>.sh`). Edit 
 Two Konnect surfaces: **gateway** (deck sync, every deploy) vs **API Catalog + Dev Portal**
 (published after every successful deploy on both main and production). Don't conflate them.
 
-Paired with **PlatformOps** (`../platformops/`): each `konnect-eu-apiops-{development,production}`
-stack provisions a control plane + a portal. Contract = **name** (`apiops-development` /
-`apiops-production`, matching `env-vars/<name>` files; `apiops-developer-portal` /
-`apiops-production-portal` for the portals). No hardcoded UUIDs — everything is resolved by name
-at runtime.
+Paired with **PlatformOps**: `konnect-eu-ko-dp-shared-2` and `-3` each provision one control plane (the
+Kong Operator data planes mirror them, see the `gitops` repo). Targets, in order: **first = `ko-dp-shared-2`**
+(push to `main`), **second = `ko-dp-shared-3`** (push to `production`). Contract = **name**: the control
+plane names match the `env-vars/<name>` files and the logical environments `shared-2` / `shared-3` used in
+the workflows (`scripts/lib.sh: cp_for_env`). No hardcoded UUIDs — everything is resolved by name at runtime.
+Developer portals are out of scope: every API has `portal: false` in `konnect.yaml`; the portal code path in
+`publish-api.sh` is intentionally left as is.
 
 ## Tooling & gates
 
@@ -24,11 +26,32 @@ at runtime.
 changes), `kongctl` (catalog/portal sync), `yq`+`jq`. Two **blocking** lint gates: OpenAPI
 (Spectral, `shared/.spectral.yaml`) and deck (`deck file lint`, `shared/deck-linting/ruleset.yaml`).
 
+## Plugin allowlist (blocking policy)
+
+`shared/deck-linting/ruleset.yaml` enforces which Kong plugins may be deployed. Any plugin not on the
+`allowed-plugins` list, at any level (global, service, route, consumer, consumer group), fails `deck file lint`
+with an `error` and blocks the pipeline before anything is written to Konnect.
+
+- **Add a plugin:** extend the `match` regex of `allowed-plugins`, add it to `tests/good.yaml`, run
+  `make lint-test`, and get it reviewed. Never add a plugin just to turn a red pipeline green.
+- **`pre-function` is special:** `deck file namespace` (in `generate.sh`) injects it to strip the API path
+  prefix, so it must be allowed. It runs Lua, so `pre-function-only-namespace-strip` and
+  `pre-function-access-phase-only` only accept exactly that generated code. Custom Lua is rejected.
+- **Tests:** `shared/deck-linting/tests/` holds `good.yaml` (must pass) and `bad-*.yaml` (must be rejected);
+  `scripts/lint-test.sh` / `make lint-test` runs them, and CI runs them in `lint-deck.yaml`. A crash or an
+  error that is not a lint violation counts as a failure, not as a rejection.
+- **deck version:** the lint jobs and the local image use deck **1.57.0**. On 1.49.1 `enumeration` crashes or
+  silently passes and the `pre-function` rules do not fire — that is why the allowlist uses `pattern`, and why
+  the generate/deploy workflows (not changed) can stay on 1.49.1 while linting needs a newer deck.
+- **Gotcha:** deck's linter rejects some patterns containing a literal comma after a digit (e.g. `1,s`); write
+  commas in a regex as `\x2c` (see `pre-function-only-namespace-strip`).
+
 ## Local checks (no creds for the offline subset)
 
 ```bash
 cd scripts && make image
 make validate generate lint APP=<api>   # OAS lint + generate + deck lint, no Konnect
+make lint-test                           # prove the deck ruleset blocks unapproved plugins
 make dry-run APPS="<api>"                # full flow, diff only (read-only)
 ```
 

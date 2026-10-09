@@ -2,13 +2,13 @@
 # reproducible on any host. Run from this directory: `make demo`, `make build`, etc.
 #
 # Override defaults inline, e.g.:
-#   make demo CP=apiops-development APPS="alice bob"
+#   make demo CP=ko-dp-shared-2 APPS="alice bob"
 #   make generate APP=alice
 
 REPO_ROOT := $(abspath $(dir $(lastword $(MAKEFILE_LIST)))/..)
 IMAGE     ?= apiops-local
 TAG       ?= latest
-CP        ?= apiops-development
+CP        ?= ko-dp-shared-2
 APP       ?= alice
 APPS      ?= alice
 ENV_FILE  := $(REPO_ROOT)/scripts/.env
@@ -18,10 +18,10 @@ DOCKER_RUN = docker run --rm -it \
   $(if $(wildcard $(ENV_FILE)),--env-file $(ENV_FILE),) \
   -v $(REPO_ROOT):/work -w /work $(IMAGE):$(TAG)
 
-.PHONY: image demo dry-run validate generate lint lint-global deploy deploy-global backup verify publish shell help
+.PHONY: image demo dry-run validate generate lint lint-global lint-test deploy deploy-global backup verify publish shell help
 
 help:
-	@echo "Targets: image | demo | dry-run | validate | generate | lint | lint-global |"
+	@echo "Targets: image | demo | dry-run | validate | generate | lint | lint-global | lint-test |"
 	@echo "         deploy | deploy-global | backup | verify | publish | shell"
 	@echo "Vars:    CP=$(CP)  APP=$(APP)  APPS='$(APPS)'  IMAGE=$(IMAGE):$(TAG)"
 
@@ -45,6 +45,9 @@ lint: ## deck file lint the generated config for one APP
 
 lint-global: ## deck file lint the global deck files
 	$(DOCKER_RUN) scripts/lint-global.sh
+
+lint-test: ## prove the deck lint ruleset blocks unapproved plugins (good/bad fixtures)
+	$(DOCKER_RUN) scripts/lint-test.sh
 
 deploy: ## diff+sync one APP to CP (DRY_RUN=1 for diff only)
 	$(DOCKER_RUN) bash -c "DRY_RUN=$${DRY_RUN:-0} scripts/deploy.sh $(APP) $(CP)"

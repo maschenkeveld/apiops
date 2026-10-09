@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # Dump a Konnect control plane's full state to backups/. Prints the backup file path on stdout
-# (logs go to stderr) so callers can capture it, e.g. FILE=$(scripts/backup.sh apiops-development dev).
+# (logs go to stderr) so callers can capture it, e.g. FILE=$(scripts/backup.sh ko-dp-shared-2 dev).
 #
 # Usage: backup.sh <control-plane> [label]
 source "$(dirname "$0")/lib.sh"

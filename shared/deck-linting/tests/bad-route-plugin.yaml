@@ -1,0 +1,13 @@
+# Fails allowed-plugins: post-function is not on the allowlist (route level).
+_format_version: "3.0"
+services:
+  - name: svc
+    host: backend.example.com
+    tags: [demo]
+    routes:
+      - name: route
+        tags: [demo]
+        strip_path: true
+        paths: [/demo]
+        plugins:
+          - name: post-function

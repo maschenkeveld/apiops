@@ -5,7 +5,7 @@
 # bundled custom-deck-linux-amd64).
 FROM node:20-bookworm-slim
 
-ARG DECK_VERSION=1.49.1
+ARG DECK_VERSION=1.57.0
 ARG YQ_VERSION=v4.44.3
 
 RUN apt-get update && apt-get install -y --no-install-recommends \
